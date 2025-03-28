@@ -12,7 +12,7 @@ Test with README.md
 2. run Tag as subcommand, following arguments as positional arguments.
 
 ```sh
-go run main.go README.md
+go run main.go README.md x
 ```
 
 ```sh
@@ -48,9 +48,17 @@ go build -ldflags="-w -s" -o main main.go
 ## Test
 
 ```sh
-file ${output}
+echo Test
 ```
 
+### x
+
 ```sh
-du -ahd0 ${output}
+echo x
+```
+
+### y
+
+```sh
+echo y
 ```

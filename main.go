@@ -9,6 +9,13 @@ import (
 	"github.com/gomarkdown/markdown/parser"
 )
 
+type Commands struct {
+	Heading     ast.Heading
+	CodeBlocks  []ast.CodeBlock
+	SubCommands []Commands
+	// env
+}
+
 func printNode(node ast.Node, level int) {
 	indent := strings.Repeat("  ", level)
 	fmt.Printf("%s%T:", indent, node)
@@ -55,6 +62,65 @@ func printNode(node ast.Node, level int) {
 	}
 }
 
+func parseCommands(doc ast.Node) []Commands {
+	var commands []Commands
+	var stack []*Commands // Track current heading hierarchy
+
+	ast.WalkFunc(doc, func(node ast.Node, entering bool) ast.WalkStatus {
+		if !entering {
+			return ast.GoToNext
+		}
+
+		switch v := node.(type) {
+		case *ast.Heading:
+			cmd := Commands{}
+			cmd.Heading = *v
+
+			// Pop stack until we find appropriate parent level
+			for len(stack) > 0 && stack[len(stack)-1].Heading.Level >= v.Level {
+				stack = stack[:len(stack)-1]
+			}
+
+			if len(stack) == 0 {
+				commands = append(commands, cmd)
+				stack = append(stack, &commands[len(commands)-1])
+			} else {
+				parent := stack[len(stack)-1]
+				parent.SubCommands = append(parent.SubCommands, cmd)
+				stack = append(stack, &parent.SubCommands[len(parent.SubCommands)-1])
+			}
+
+		case *ast.CodeBlock:
+			if len(stack) > 0 {
+				current := stack[len(stack)-1]
+				current.CodeBlocks = append(current.CodeBlocks, *v)
+			}
+		}
+		return ast.GoToNext
+	})
+
+	return commands
+}
+
+func printCommands(cmds []Commands, level int) {
+	indent := strings.Repeat("  ", level)
+	for _, cmd := range cmds {
+		heading := ""
+		if len(cmd.Heading.Children) > 0 {
+			if txt, ok := cmd.Heading.Children[0].(*ast.Text); ok {
+				heading = string(txt.Literal)
+			}
+		}
+		fmt.Printf("%s%s (Level %d)\n", indent, heading, cmd.Heading.Level)
+
+		for _, block := range cmd.CodeBlocks {
+			fmt.Printf("%s  Code[%s]: %q\n", indent, block.Info, string(block.Literal))
+		}
+
+		printCommands(cmd.SubCommands, level+1)
+	}
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: markdown-build <input-file>")
@@ -74,4 +140,10 @@ func main() {
 	fmt.Println("AST Structure:")
 	fmt.Println("-------------")
 	printNode(doc, 0)
+
+	fmt.Println("")
+	fmt.Println("Commands:")
+	fmt.Println("-------------")
+	commands := parseCommands(doc)
+	printCommands(commands, 0)
 }
