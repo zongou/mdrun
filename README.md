@@ -1,4 +1,4 @@
-# Markdown Builder Test
+# Demo
 
 The basic idea is make markdown work like makemenuconfig
 
@@ -12,13 +12,16 @@ Test with README.md
 2. run Tag as subcommand, following arguments as positional arguments.
 
 ```sh
-go run main.go README.md x
+go run main.go
 ```
 
 ```sh
 go build -ldflags='-w -s'
 du -ahd0 mdrun
-hyperfine "./mdrun ./README.md"
+```
+
+```sh
+hyperfine "./mdrun"
 ```
 
 ## To-Does
@@ -61,4 +64,10 @@ echo x
 
 ```sh
 echo y
+```
+
+#### z
+
+```js
+console.log(1);
 ```

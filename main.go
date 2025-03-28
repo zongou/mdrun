@@ -1,8 +1,10 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/gomarkdown/markdown/ast"
@@ -121,13 +123,55 @@ func printCommands(cmds []Commands, level int) {
 	}
 }
 
-func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: markdown-build <input-file>")
-		return
+// findReadme searches for a README.md file in the current or parent directories.
+func findReadme() (string, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", err
 	}
 
-	content, err := os.ReadFile(os.Args[1])
+	for {
+		files, err := os.ReadDir(dir)
+		if err != nil {
+			return "", err
+		}
+
+		for _, file := range files {
+			// Check for "README.md" ignoring case
+			if !file.IsDir() && strings.EqualFold(file.Name(), "README.md") {
+				return filepath.Join(dir, file.Name()), nil
+			}
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir { // Reached the root directory
+			break
+		}
+		dir = parent
+	}
+
+	return "", fmt.Errorf("README.md not found")
+}
+
+func main() {
+	// Define the -f flag for specifying the markdown file
+	fileFlag := flag.String("f", "", "Path to the markdown file")
+	flag.Parse()
+
+	var inputFile string
+	if *fileFlag != "" {
+		inputFile = *fileFlag
+	} else {
+		var err error
+		inputFile, err = findReadme()
+		if err != nil {
+			fmt.Println("Error:", err)
+			fmt.Println("Usage: markdown-build [-f <input-file>]")
+			return
+		}
+	}
+
+	content, err := os.ReadFile(inputFile)
 	if err != nil {
 		fmt.Printf("Error reading file: %v\n", err)
 		return
