@@ -153,10 +153,74 @@ func findReadme() (string, error) {
 	return "", fmt.Errorf("README.md not found")
 }
 
+func getHeadingText(heading ast.Heading) string {
+	if len(heading.Children) > 0 {
+		if txt, ok := heading.Children[0].(*ast.Text); ok {
+			return string(txt.Literal)
+		}
+	}
+	return ""
+}
+
+func executeCodeBlock(block ast.CodeBlock, args []string) error {
+	fmt.Printf("Executing code block [%s] with args %v:\n%s\n",
+		block.Info, args, string(block.Literal))
+	// TODO: implement actual code block execution with args
+	return nil
+}
+
+func findAndExecuteNestedCommand(cmds []Commands, path []string, args []string, currentDepth int) bool {
+	if currentDepth >= len(path) {
+		return false
+	}
+
+	targetHeading := path[currentDepth]
+	for _, cmd := range cmds {
+		heading := getHeadingText(cmd.Heading)
+
+		if heading == targetHeading {
+			if currentDepth == len(path)-1 {
+				// Execute all code blocks under this heading with args
+				for _, block := range cmd.CodeBlocks {
+					if err := executeCodeBlock(block, args); err != nil {
+						fmt.Printf("Error executing block: %v\n", err)
+						return false
+					}
+				}
+				return true
+			}
+			// Continue searching in subcommands
+			if findAndExecuteNestedCommand(cmd.SubCommands, path, args, currentDepth+1) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func main() {
-	// Define the -f flag for specifying the markdown file
 	fileFlag := flag.String("f", "", "Path to the markdown file")
 	flag.Parse()
+
+	args := flag.Args()
+	if len(args) < 1 {
+		fmt.Println("Usage: markdown-build [-f <input-file>] <heading-path...> [-- <args...>]")
+		return
+	}
+
+	// Split args into heading path and code block args
+	var headingPath []string
+	var codeArgs []string
+	for i, arg := range args {
+		if arg == "--" {
+			headingPath = args[:i]
+			codeArgs = args[i+1:]
+			break
+		}
+	}
+	if len(codeArgs) == 0 { // No "--" found
+		headingPath = args
+	}
 
 	var inputFile string
 	if *fileFlag != "" {
@@ -181,13 +245,9 @@ func main() {
 	p := parser.NewWithExtensions(extensions)
 	doc := p.Parse(content)
 
-	fmt.Println("AST Structure:")
-	fmt.Println("-------------")
-	printNode(doc, 0)
-
-	fmt.Println("")
-	fmt.Println("Commands:")
-	fmt.Println("-------------")
 	commands := parseCommands(doc)
-	printCommands(commands, 0)
+	if !findAndExecuteNestedCommand(commands, headingPath, codeArgs, 0) {
+		fmt.Printf("Command path '%s' not found\n", strings.Join(headingPath, " > "))
+		return
+	}
 }
