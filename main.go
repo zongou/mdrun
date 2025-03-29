@@ -12,62 +12,72 @@ import (
 	"github.com/gomarkdown/markdown/parser"
 )
 
-type Commands struct {
-	Heading     ast.Heading
-	CodeBlocks  []ast.CodeBlock
-	SubCommands []Commands
+type cmdNode struct {
+	Heading    ast.Heading
+	CodeBlocks []ast.CodeBlock
+	Children   []cmdNode
+	// Description []string
 	// env
 }
 
-func printNode(node ast.Node, level int) {
-	indent := strings.Repeat("  ", level)
-	fmt.Printf("%s%T:", indent, node)
+// func printNode(node ast.Node, level int) {
+// 	indent := strings.Repeat("  ", level)
+// 	fmt.Printf("%s%T:", indent, node)
 
-	switch v := node.(type) {
-	case *ast.Document:
-		fmt.Printf(" (document)")
-	case *ast.Heading:
-		fmt.Printf(" (level %d)", v.Level)
-		if len(v.Children) > 0 {
-			if txt, ok := v.Children[0].(*ast.Text); ok {
-				fmt.Printf(" %q", txt.Literal)
-			}
-		}
-	case *ast.Text:
-		fmt.Printf(" %q", v.Literal)
-	case *ast.CodeBlock:
-		fmt.Printf(" [%s]", v.Info)
-		fmt.Printf(" %q", string(v.Literal))
-	case *ast.Link:
-		fmt.Printf(" [dest=%s]", v.Destination)
-		if v.Title != nil {
-			fmt.Printf(" title=%q", v.Title)
-		}
-	case *ast.List:
-		// fmt.Printf(" (ordered=%v)", v.IsOrdered)
-	case *ast.Table:
-		fmt.Printf(" (table)")
-	case *ast.HTMLBlock:
-		fmt.Printf(" %q", v.Literal)
-	case *ast.Paragraph:
-		fmt.Printf(" (paragraph)")
-	case *ast.Image:
-		fmt.Printf(" [src=%s]", v.Destination)
-	case *ast.Strong:
-		fmt.Printf(" (strong)")
-	case *ast.Emph:
-		fmt.Printf(" (emphasis)")
-	}
-	fmt.Println()
+// 	switch v := node.(type) {
+// 	case *ast.Document:
+// 		fmt.Printf(" (document)")
+// 	case *ast.Heading:
+// 		fmt.Printf(" (level %d)", v.Level)
+// 		if len(v.Children) > 0 {
+// 			if txt, ok := v.Children[0].(*ast.Text); ok {
+// 				fmt.Printf(" %q", txt.Literal)
+// 			}
+// 		}
+// 	case *ast.Text:
+// 		fmt.Printf(" %q", v.Literal)
+// 	case *ast.CodeBlock:
+// 		fmt.Printf(" [%s]", v.Info)
+// 		fmt.Printf(" %q", string(v.Literal))
+// 	case *ast.Link:
+// 		fmt.Printf(" [dest=%s]", v.Destination)
+// 		if v.Title != nil {
+// 			fmt.Printf(" title=%q", v.Title)
+// 		}
+// 	case *ast.List:
+// 		// fmt.Printf(" (ordered=%v)", v.IsOrdered)
+// 	case *ast.Table:
+// 		fmt.Printf(" (table)")
+// 	case *ast.HTMLBlock:
+// 		fmt.Printf(" %q", v.Literal)
+// 	case *ast.Paragraph:
+// 		fmt.Printf(" (paragraph)")
+// 	case *ast.Image:
+// 		fmt.Printf(" [src=%s]", v.Destination)
+// 	case *ast.Strong:
+// 		fmt.Printf(" (strong)")
+// 	case *ast.Emph:
+// 		fmt.Printf(" (emphasis)")
+// 	}
+// 	fmt.Println()
 
-	for _, child := range node.GetChildren() {
-		printNode(child, level+1)
+// 	for _, child := range node.GetChildren() {
+// 		printNode(child, level+1)
+// 	}
+// }
+
+func getHeadingText(heading ast.Heading) string {
+	if len(heading.Children) > 0 {
+		if txt, ok := heading.Children[0].(*ast.Text); ok {
+			return string(txt.Literal)
+		}
 	}
+	return ""
 }
 
-func parseCommands(doc ast.Node) []Commands {
-	var commands []Commands
-	var stack []*Commands // Track current heading hierarchy
+func parseCommands(doc ast.Node) []cmdNode {
+	var commands []cmdNode
+	var stack []*cmdNode // Track current heading hierarchy
 
 	ast.WalkFunc(doc, func(node ast.Node, entering bool) ast.WalkStatus {
 		if !entering {
@@ -76,7 +86,7 @@ func parseCommands(doc ast.Node) []Commands {
 
 		switch v := node.(type) {
 		case *ast.Heading:
-			cmd := Commands{}
+			cmd := cmdNode{}
 			cmd.Heading = *v
 
 			// Pop stack until we find appropriate parent level
@@ -89,8 +99,8 @@ func parseCommands(doc ast.Node) []Commands {
 				stack = append(stack, &commands[len(commands)-1])
 			} else {
 				parent := stack[len(stack)-1]
-				parent.SubCommands = append(parent.SubCommands, cmd)
-				stack = append(stack, &parent.SubCommands[len(parent.SubCommands)-1])
+				parent.Children = append(parent.Children, cmd)
+				stack = append(stack, &parent.Children[len(parent.Children)-1])
 			}
 
 		case *ast.CodeBlock:
@@ -105,22 +115,49 @@ func parseCommands(doc ast.Node) []Commands {
 	return commands
 }
 
-func printCommands(cmds []Commands, level int) {
-	indent := strings.Repeat("  ", level)
+func printCommands(cmds []cmdNode, level int) {
+	// indent := strings.Repeat("  ", level)
+	maxHeaderLen := 0
+	var headingMap = make(map[int]string, 0)
 	for _, cmd := range cmds {
-		heading := ""
-		if len(cmd.Heading.Children) > 0 {
-			if txt, ok := cmd.Heading.Children[0].(*ast.Text); ok {
-				heading = string(txt.Literal)
+		if cmd.CodeBlocks != nil {
+			if cmd.Heading.Level == 1 {
+				// Skip level 1 headers
+				printCommands(cmd.Children, level+1)
+				break
+			}
+			heading := getHeadingText(cmd.Heading)
+			
+			headingMap[cmd.Heading.Level] = heading
+			if value, ok := headingMap[2]; ok {
+				fmt.Printf("mapping[%d] is %s\n", 2, value)
+			} else {
+				fmt.Printf("mapping[%d] is false\n", 2)
+			}
+
+			fmt.Printf("%d %s\n", cmd.Heading.Level, heading)
+
+			for _, block := range cmd.CodeBlocks {
+				fmt.Printf("  ```%s\n", block.Info)
+				// fmt.Printf(" [%s]: \n", block.Info)
+				// fmt.Printf("%s  Code[%s]: %s\n", indent, block.Info, string(block.Literal))
+				// fmt.Printf("%s", strings.Join(append(strings.Split(string(block.Literal), "\n"), "    "), "\n"))
+				lines := strings.Split(string(block.Literal), "\n")
+				currentHeaderLen := len(heading)
+				if currentHeaderLen > maxHeaderLen {
+					maxHeaderLen = currentHeaderLen
+				}
+				for index, line := range lines {
+					if index == len(lines)-1 {
+						fmt.Printf("  %s", line)
+					} else {
+						fmt.Printf("  %s\n", line)
+					}
+				}
+				fmt.Printf("```\n")
 			}
 		}
-		fmt.Printf("%s%s (Level %d)\n", indent, heading, cmd.Heading.Level)
-
-		for _, block := range cmd.CodeBlocks {
-			fmt.Printf("%s  Code[%s]: %q\n", indent, block.Info, string(block.Literal))
-		}
-
-		printCommands(cmd.SubCommands, level+1)
+		printCommands(cmd.Children, level+1)
 	}
 }
 
@@ -154,15 +191,6 @@ func findReadme() (string, error) {
 	return "", fmt.Errorf("README.md not found")
 }
 
-func getHeadingText(heading ast.Heading) string {
-	if len(heading.Children) > 0 {
-		if txt, ok := heading.Children[0].(*ast.Text); ok {
-			return string(txt.Literal)
-		}
-	}
-	return ""
-}
-
 func executeCodeBlock(block ast.CodeBlock, args []string) error {
 	info := string(block.Info) // Convert []byte to string
 	// fmt.Printf("Executing code block [%s] with args %v:\n%s\n",
@@ -174,13 +202,13 @@ func executeCodeBlock(block ast.CodeBlock, args []string) error {
 	switch info { // Use the converted string for comparison
 	case "sh":
 		cmdName = "sh"
-		insertArgs = []string{"-s"}
+		insertArgs = []string{"-eu", "-s"}
 	case "shell":
 		cmdName = "sh"
-		insertArgs = []string{"-s"}
+		insertArgs = []string{"-eu", "-s"}
 	case "bash":
 		cmdName = "bash"
-		insertArgs = []string{"-s"}
+		insertArgs = []string{"-eu", "-s"}
 	case "js":
 		cmdName = "node"
 		insertArgs = []string{"-"}
@@ -206,13 +234,13 @@ func executeCodeBlock(block ast.CodeBlock, args []string) error {
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = strings.NewReader(string(block.Literal))
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("error executing shell command: %w", err)
+		return fmt.Errorf("error executing command: %w", err)
 	}
 
 	return nil
 }
 
-func findAndExecuteNestedCommand(cmds []Commands, path []string, args []string, currentDepth int) bool {
+func findAndExecuteNestedCommand(cmds []cmdNode, path []string, args []string, currentDepth int) bool {
 	if currentDepth >= len(path) {
 		return false
 	}
@@ -222,14 +250,14 @@ func findAndExecuteNestedCommand(cmds []Commands, path []string, args []string, 
 		// Skip level 1 headers and only process level 2+ headers
 		if cmd.Heading.Level == 1 {
 			// Search through level 1's subcommands directly
-			if findAndExecuteNestedCommand(cmd.SubCommands, path, args, currentDepth) {
+			if findAndExecuteNestedCommand(cmd.Children, path, args, currentDepth) {
 				return true
 			}
 			continue
 		}
 
 		heading := getHeadingText(cmd.Heading)
-		if heading == targetHeading {
+		if strings.EqualFold(heading, targetHeading) {
 			if currentDepth == len(path)-1 {
 				// Execute all code blocks under this heading with args
 				for _, block := range cmd.CodeBlocks {
@@ -241,7 +269,7 @@ func findAndExecuteNestedCommand(cmds []Commands, path []string, args []string, 
 				return true
 			}
 			// Continue searching in subcommands
-			if findAndExecuteNestedCommand(cmd.SubCommands, path, args, currentDepth+1) {
+			if findAndExecuteNestedCommand(cmd.Children, path, args, currentDepth+1) {
 				return true
 			}
 		}
@@ -254,10 +282,6 @@ func main() {
 	flag.Parse()
 
 	args := flag.Args()
-	if len(args) < 1 {
-		fmt.Println("Usage: markdown-build [-f <input-file>] <heading-path...> [-- <args...>]")
-		return
-	}
 
 	// Split args into heading path and code block args
 	var headingPath []string
@@ -297,6 +321,14 @@ func main() {
 	doc := p.Parse(content)
 
 	commands := parseCommands(doc)
+
+	if len(args) < 1 {
+		fmt.Println("Usage: markdown-build [-f <input-file>] <heading-path...> [-- <args...>]")
+		printCommands(commands, 0)
+		// printNode(doc, 0)
+		return
+	}
+
 	if !findAndExecuteNestedCommand(commands, headingPath, codeArgs, 0) {
 		fmt.Printf("Command path '%s' not found\n", strings.Join(headingPath, " > "))
 		return

@@ -6,6 +6,10 @@ The basic idea is make markdown work like makemenuconfig
 | ------ | ----- |
 | output | main  |
 
+| command   | description |
+| --------- | ----------- |
+| configure | configure   |
+
 Test with README.md
 
 1. find the target markdown file in current dir in the name of README.md case ignored, if not found, search upper dir, or direct a file with -f or --file option
@@ -53,13 +57,33 @@ print("python with arguments: %s" %(sys.argv))
 
 ```sh
 go build -ldflags="-w -s"
+du -ahd0 ./mdrun
 ```
 
-## Test
+## Test2
 
 ```sh
 go run main.go Build
+./mdrun
+./mdrun configure
 ./mdrun sh -- a b c
 ./mdrun js -- a b c
 ./mdrun py -- a b c
+```
+
+## tools
+
+```sh
+mask --maskfile ./README.md --help
+xc --no-tty
+```
+
+### tools1
+
+```sh
+echo example1
+```
+
+```sh
+echo example2
 ```
