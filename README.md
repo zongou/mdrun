@@ -11,19 +11,6 @@ Test with README.md
 1. find the target markdown file in current dir in the name of README.md case ignored, if not found, search upper dir, or direct a file with -f or --file option
 2. run Tag as subcommand, following arguments as positional arguments.
 
-```sh
-go run main.go
-```
-
-```sh
-go build -ldflags='-w -s'
-du -ahd0 mdrun
-```
-
-```sh
-hyperfine "./mdrun"
-```
-
 ## To-Does
 
 - [ ] depends
@@ -42,32 +29,37 @@ echo OUTPUT_DIR=${OUTPUT_DIR}
 echo PKG_DIR=${PKG_DIR}
 ```
 
+## sh
+
+```sh
+echo "shellscript with arguments: $*"
+```
+
+## js
+
+```js
+console.log(`nodejs with arguments: ${process.argv.slice(2)}`);
+```
+
+## py
+
+```python
+import sys
+
+print("python with arguments: %s" %(sys.argv))
+```
+
 ## Build
 
 ```sh
-go build -ldflags="-w -s" -o main main.go
+go build -ldflags="-w -s"
 ```
 
 ## Test
 
 ```sh
-echo Test
-```
-
-### x
-
-```sh
-echo x
-```
-
-### y
-
-```sh
-echo y
-```
-
-#### z
-
-```js
-console.log(1);
+go run main.go Build
+./mdrun sh -- a b c
+./mdrun js -- a b c
+./mdrun py -- a b c
 ```

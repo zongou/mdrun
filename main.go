@@ -176,8 +176,16 @@ func findAndExecuteNestedCommand(cmds []Commands, path []string, args []string, 
 
 	targetHeading := path[currentDepth]
 	for _, cmd := range cmds {
-		heading := getHeadingText(cmd.Heading)
+		// Skip level 1 headers and only process level 2+ headers
+		if cmd.Heading.Level == 1 {
+			// Search through level 1's subcommands directly
+			if findAndExecuteNestedCommand(cmd.SubCommands, path, args, currentDepth) {
+				return true
+			}
+			continue
+		}
 
+		heading := getHeadingText(cmd.Heading)
 		if heading == targetHeading {
 			if currentDepth == len(path)-1 {
 				// Execute all code blocks under this heading with args
