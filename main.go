@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -163,9 +164,51 @@ func getHeadingText(heading ast.Heading) string {
 }
 
 func executeCodeBlock(block ast.CodeBlock, args []string) error {
-	fmt.Printf("Executing code block [%s] with args %v:\n%s\n",
-		block.Info, args, string(block.Literal))
-	// TODO: implement actual code block execution with args
+	info := string(block.Info) // Convert []byte to string
+	// fmt.Printf("Executing code block [%s] with args %v:\n%s\n",
+	// 	info, args, string(block.Literal))
+
+	var cmdName string
+	var insertArgs []string
+
+	switch info { // Use the converted string for comparison
+	case "sh":
+		cmdName = "sh"
+		insertArgs = []string{"-s"}
+	case "shell":
+		cmdName = "sh"
+		insertArgs = []string{"-s"}
+	case "bash":
+		cmdName = "bash"
+		insertArgs = []string{"-s"}
+	case "js":
+		cmdName = "node"
+		insertArgs = []string{"-"}
+	case "javascript":
+		cmdName = "node"
+		insertArgs = []string{"-"}
+	case "py":
+		cmdName = "python"
+		insertArgs = []string{"-"}
+	case "python":
+		cmdName = "python"
+		insertArgs = []string{"-"}
+	case "zig":
+		cmdName = "zig"
+	default:
+		return fmt.Errorf("unsupported code block type: %s", info)
+	}
+
+	args = append(insertArgs, args...)
+
+	cmd := exec.Command(cmdName, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = strings.NewReader(string(block.Literal))
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("error executing shell command: %w", err)
+	}
+
 	return nil
 }
 
