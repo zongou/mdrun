@@ -39,7 +39,7 @@ Test with README.md
 - [ ] depends
 - [ ] target toolchain
 
-## Configure
+## Configurex
 
 tidy
 go run tidy  
@@ -55,6 +55,19 @@ Build mdrun
 
 ```sh
 go build -ldflags="-w -s"
+```
+
+## Install
+
+```sh
+go run . build
+if test ${PREFIX+1}; then
+    install mdrun ${PREFIX}/bin/mdrun
+else
+    sudo install mdrun /usr/local/bin/mdrun
+fi
+mdrun --complete
+echo "Restart shell to apply changes"
 ```
 
 ## benchmark

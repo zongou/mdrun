@@ -12,14 +12,17 @@ import (
 	"github.com/fatih/color"
 	"github.com/gomarkdown/markdown/ast"
 	"github.com/gomarkdown/markdown/parser"
+	"github.com/posener/complete/v2"
+	"github.com/posener/complete/v2/install"
+	"github.com/posener/complete/v2/predict"
 )
 
-type cmdNode struct {
+type Node struct {
 	Heading     ast.Heading
 	CodeBlocks  []ast.CodeBlock
-	Children    []cmdNode
+	Children    []Node
 	Env         map[string]string
-	Parent      *cmdNode
+	Parent      *Node
 	Description string
 }
 
@@ -32,9 +35,9 @@ func getHeadingText(heading ast.Heading) string {
 	return ""
 }
 
-func parseCommands(doc ast.Node) []cmdNode {
-	var commands []cmdNode
-	var stack []*cmdNode // Track current heading hierarchy
+func parseCommands(doc ast.Node) []Node {
+	var commands []Node
+	var stack []*Node // Track current heading hierarchy
 
 	ast.WalkFunc(doc, func(node ast.Node, entering bool) ast.WalkStatus {
 		if !entering {
@@ -43,7 +46,7 @@ func parseCommands(doc ast.Node) []cmdNode {
 
 		switch v := node.(type) {
 		case *ast.Heading:
-			cmdNode := cmdNode{}
+			cmdNode := Node{}
 			cmdNode.Heading = *v
 
 			// Pop stack until we find appropriate parent level
@@ -156,7 +159,7 @@ func findReadme() (string, error) {
 	return "", fmt.Errorf("README.md not found")
 }
 
-func execCmdNode(cmdNode cmdNode, args []string) error {
+func execCmdNode(cmdNode Node, args []string) error {
 	for _, codeBlock := range cmdNode.CodeBlocks {
 		info := string(codeBlock.Info) // Convert []byte to string
 		// fmt.Printf("Executing code block [%s] with args %v:\n%s\n",
@@ -228,7 +231,7 @@ func execCmdNode(cmdNode cmdNode, args []string) error {
 	return nil
 }
 
-func findAndExecuteNestedCommand(nodes []cmdNode, path []string, args []string, currentDepth int) bool {
+func findAndExecuteNestedCommand(nodes []Node, path []string, args []string, currentDepth int) bool {
 	if currentDepth >= len(path) {
 		return false
 	}
@@ -259,7 +262,7 @@ func findAndExecuteNestedCommand(nodes []cmdNode, path []string, args []string, 
 	return false
 }
 
-func showHelp(cmdNodes []cmdNode, verbose bool) {
+func showHelp(cmdNodes []Node, verbose bool) {
 	programName := filepath.Base(os.Args[0])
 	const indention = "    "
 
@@ -280,8 +283,8 @@ func showHelp(cmdNodes []cmdNode, verbose bool) {
 	if cmdNodes != nil {
 		fmt.Printf("%s\n", color.YellowString("HEADING_GUIDE:"))
 
-		var treeView func(cmdNode cmdNode, level int, branch treeprint.Tree)
-		treeView = func(cmdNode cmdNode, level int, branch treeprint.Tree) {
+		var treeView func(cmdNode Node, level int, branch treeprint.Tree)
+		treeView = func(cmdNode Node, level int, branch treeprint.Tree) {
 			for _, child := range cmdNode.Children {
 				if len(child.CodeBlocks) > 0 || len(child.Children) > 0 {
 					branch := branch.AddBranch(getHeadingText(child.Heading))
@@ -291,8 +294,8 @@ func showHelp(cmdNodes []cmdNode, verbose bool) {
 			}
 		}
 
-		var treeViewWithDescription func(cmdNode cmdNode, level int, branch treeprint.Tree, maxLineRuneLen int)
-		treeViewWithDescription = func(cmdNode cmdNode, level int, branch treeprint.Tree, maxLineRuneLen int) {
+		var treeViewWithDescription func(cmdNode Node, level int, branch treeprint.Tree, maxLineRuneLen int)
+		treeViewWithDescription = func(cmdNode Node, level int, branch treeprint.Tree, maxLineRuneLen int) {
 			for _, child := range cmdNode.Children {
 				if len(child.CodeBlocks) > 0 || len(child.Children) > 0 {
 					var sb strings.Builder
@@ -370,38 +373,69 @@ func showHelp(cmdNodes []cmdNode, verbose bool) {
 	// fmt.Println("Use 'md [command] --help' for more information about a command.")
 }
 
+func completeSub(nodes []Node) map[string]*complete.Command {
+	result := map[string]*complete.Command{}
+
+	for _, node := range nodes {
+		if node.Heading.Level > 1 {
+			// Ensure getHeadingText does not return an empty string or cause a panic
+			headingLowerCased := strings.ToLower(getHeadingText(node.Heading))
+			if headingLowerCased != "" { // Avoid adding empty keys to the map
+				result[headingLowerCased] = &complete.Command{
+					Sub: completeSub(node.Children),
+				}
+			}
+		} else {
+			// Append the result of the recursive call to avoid losing data
+			subCommands := completeSub(node.Children)
+			for k, v := range subCommands {
+				result[k] = v
+			}
+		}
+	}
+
+	return result
+}
+
+type Config struct {
+	FilePath   string
+	Verbose    bool
+	Args       []string
+	complete   bool
+	uncomplete bool
+}
+
 func main() {
-	fileFlag := flag.String("f", "", "Path to the markdown file")
-	flag.StringVar(fileFlag, "file", "", "Path to the markdown file (same as -f)")
+	var config Config
+	flag.StringVar(&config.FilePath, "f", "", "Path to the markdown file")
+	flag.StringVar(&config.FilePath, "file", "", "Path to the markdown file (same as -f)")
 
-	verbose := flag.Bool("v", false, "enable verbose mode")
-	flag.BoolVar(verbose, "verbose", false, "enable verbose mode (same as -v)")
+	flag.BoolVar(&config.Verbose, "v", false, "enable verbose mode")
+	flag.BoolVar(&config.Verbose, "verbose", false, "enable verbose mode (same as -v)")
 
-	// Customize help message
+	flag.BoolVar(&config.complete, "complete", false, "install shell completion")
+	flag.BoolVar(&config.uncomplete, "uncomplete", false, "uninstall shell completion")
+
 	flag.Usage = func() {
-		showHelp(nil, false) // Assuming false for showInShort
+		showHelp(nil, config.Verbose) // Assuming false for showInShort
 	}
 
 	flag.Parse()
-	args := flag.Args()
 
-	// Split args into heading path and code block args
-	var headingPath []string
-	var codeArgs []string
-	for i, arg := range args {
-		if arg == "--" {
-			headingPath = args[:i]
-			codeArgs = args[i+1:]
-			break
-		}
+	programName := filepath.Base(os.Args[0])
+
+	if config.complete {
+		install.Install(programName)
+		return
 	}
-	if len(codeArgs) == 0 { // No "--" found
-		headingPath = args
+	if config.uncomplete {
+		install.Uninstall(programName)
+		return
 	}
 
 	var inputFile string
-	if *fileFlag != "" {
-		inputFile = *fileFlag
+	if config.FilePath != "" {
+		inputFile = config.FilePath
 	} else {
 		var err error
 		inputFile, err = findReadme()
@@ -425,10 +459,44 @@ func main() {
 	p := parser.NewWithExtensions(extensions)
 	doc := p.Parse(content)
 
-	cmdNodes := parseCommands(doc)
+	nodes := parseCommands(doc)
+
+	cmd := &complete.Command{
+		Flags: map[string]complete.Predictor{
+			"h":          predict.Something,
+			"help":       predict.Something,
+			"v":          predict.Something,
+			"verbose":    predict.Something,
+			"f":          predict.Files("*.md"),
+			"file":       predict.Files("*.md"),
+			"complete":   predict.Something,
+			"uncomplete": predict.Something,
+		},
+		Sub: completeSub(nodes),
+	}
+	cmd.Complete(programName)
 
 	flag.Usage = func() {
-		showHelp(cmdNodes, *verbose) // Assuming false for showInShort
+		showHelp(nodes, false) // Assuming false for showInShort
+	}
+
+	args := flag.Args()
+
+	// Split args into heading path and code block args
+	var headingPath []string
+	for i, arg := range args {
+		if arg == "--" {
+			headingPath = args[:i]
+			config.Args = args[i+1:]
+			break
+		}
+	}
+	if len(config.Args) == 0 { // No "--" found
+		headingPath = args
+	}
+
+	flag.Usage = func() {
+		showHelp(nodes, config.Verbose) // Assuming false for showInShort
 	}
 
 	if len(args) < 1 {
@@ -436,7 +504,7 @@ func main() {
 		return
 	}
 
-	if !findAndExecuteNestedCommand(cmdNodes, headingPath, codeArgs, 0) {
+	if !findAndExecuteNestedCommand(nodes, headingPath, config.Args, 0) {
 		fmt.Printf("Command path '%s' not found\n", strings.Join(headingPath, " > "))
 		return
 	}

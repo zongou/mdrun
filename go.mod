@@ -5,14 +5,13 @@ go 1.23.5
 require (
 	github.com/GoToUse/treeprint v0.0.0-20230314143140-b9b91db455f6
 	github.com/gomarkdown/markdown v0.0.0-20250311123330-531bef5e742b
+	github.com/posener/complete/v2 v2.1.0
 )
 
 require (
-	github.com/davecgh/go-spew v1.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
+	github.com/posener/script v1.2.0 // indirect
 )
 
 require (
