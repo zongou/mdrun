@@ -377,7 +377,7 @@ func completeSub(nodes []Node) map[string]*complete.Command {
 	result := map[string]*complete.Command{}
 
 	for _, node := range nodes {
-		if node.Heading.Level > 1 {
+		if node.Heading.Level > 1 && len(node.CodeBlocks) > 0 {
 			// Ensure getHeadingText does not return an empty string or cause a panic
 			headingLowerCased := strings.ToLower(getHeadingText(node.Heading))
 			if headingLowerCased != "" { // Avoid adding empty keys to the map
