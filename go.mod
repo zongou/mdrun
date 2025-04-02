@@ -18,3 +18,5 @@ require (
 	github.com/fatih/color v1.18.0
 	golang.org/x/sys v0.31.0 // indirect
 )
+
+replace github.com/posener/complete/v2 => ./complete
