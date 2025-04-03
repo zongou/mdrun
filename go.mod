@@ -19,4 +19,4 @@ require (
 	golang.org/x/sys v0.31.0 // indirect
 )
 
-replace github.com/posener/complete/v2 => ./complete
+replace github.com/posener/complete/v2 => /media/user/RD20/repos/complete
