@@ -421,14 +421,14 @@ func main() {
 		var err error
 		inputFile, err = findDoc()
 		if err != nil {
-			fmt.Printf("Error finding document: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error finding document: %v\n", err)
 			return
 		}
 	}
 
 	content, err := os.ReadFile(inputFile)
 	if err != nil {
-		fmt.Printf("Error reading file: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
 		return
 	}
 
@@ -468,7 +468,7 @@ func main() {
 	}
 
 	if !findAndExecuteNestedCommand(cmdNodes, headingPath, subCmdArgs, 0) {
-		fmt.Printf("Command path '%s' not found\n", strings.Join(headingPath, " > "))
+		fmt.Fprintf(os.Stderr, "Command path '%s' not found\n", strings.Join(headingPath, " > "))
 		return
 	}
 }
