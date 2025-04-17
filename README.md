@@ -126,6 +126,7 @@ Test scoped env
 | scope     | env   |
 
 ```sh
+env|grep scope
 for env in \
     MD_EXE \
     MD_FILE \
