@@ -373,20 +373,19 @@ func showCommands(cmdNodes []cmdNode, verbose bool) {
 func showHelp() {
 	const indention = "    "
 
-	fmt.Printf("%s\n\n", "Run markdown codeblocks by its heading.")
-	fmt.Printf("%s\n", color.YellowString("USAGE:"))
-	fmt.Printf("%s%s [--file FILE] <heading...> [-- <args...>]\n", indention, programName)
-	fmt.Println()
+	fmt.Fprintf(os.Stderr, "%s\n\n", "Run markdown codeblocks by its heading.")
+	fmt.Fprintf(os.Stderr, "%s\n", color.YellowString("USAGE:"))
+	fmt.Fprintf(os.Stderr, "%s%s [--file FILE] <heading...> [-- <args...>]\n", indention, programName)
+	fmt.Fprintln(os.Stderr)
 
-	fmt.Printf("%s\n", color.YellowString("FLAGS:"))
-	fmt.Printf("%s-h, --help        Show this help\n", indention)
-	fmt.Printf("%s-v, --verbose     Print more information\n", indention)
-	fmt.Println()
+	fmt.Fprintf(os.Stderr, "%s\n", color.YellowString("FLAGS:"))
+	fmt.Fprintf(os.Stderr, "%s-h, --help        Show this help\n", indention)
+	fmt.Fprintf(os.Stderr, "%s-v, --verbose     Print more information\n", indention)
+	fmt.Fprintln(os.Stderr)
 
-	fmt.Printf("%s\n", color.YellowString("OPTIONS:"))
-	fmt.Printf("%s-f, --file        MarkDown file to use\n", indention)
-	fmt.Println()
-	// fmt.Println("Use 'md [command] --help' for more information about a command.")
+	fmt.Fprintf(os.Stderr, "%s\n", color.YellowString("OPTIONS:"))
+	fmt.Fprintf(os.Stderr, "%s-f, --file        MarkDown file to use\n", indention)
+	fmt.Fprintln(os.Stderr)
 }
 
 func main() {
@@ -418,14 +417,14 @@ func main() {
 		var err error
 		inputFile, err = findDoc()
 		if err != nil {
-			fmt.Printf("Error finding document: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error finding document: %v\n", err)
 			return
 		}
 	}
 
 	content, err := os.ReadFile(inputFile)
 	if err != nil {
-		fmt.Printf("Error reading file: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
 		return
 	}
 
@@ -465,7 +464,7 @@ func main() {
 	}
 
 	if !findAndExecuteNestedCommand(cmdNodes, headingPath, subCmdArgs, 0) {
-		fmt.Printf("Command path '%s' not found\n", strings.Join(headingPath, " > "))
+		fmt.Fprintf(os.Stderr, "Command path '%s' not found\n", strings.Join(headingPath, " > "))
 		return
 	}
 }
