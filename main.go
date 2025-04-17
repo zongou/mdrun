@@ -107,8 +107,7 @@ func parseDoc(doc ast.Node) []cmdNode {
 
 		switch v := node.(type) {
 		case *ast.Heading:
-			cmdNode := cmdNode{}
-			cmdNode.Heading = *v
+			cmdNode := cmdNode{Heading: *v}
 
 			// Pop stack until we find appropriate parent level
 			for len(stack) > 0 && stack[len(stack)-1].Heading.Level >= v.Level {
@@ -123,27 +122,22 @@ func parseDoc(doc ast.Node) []cmdNode {
 				parent.Children = append(parent.Children, cmdNode)
 				current := &parent.Children[len(parent.Children)-1]
 				current.Parent = parent
-
 				stack = append(stack, current)
 			}
 
 		case *ast.Paragraph:
 			if len(stack) > 0 {
 				current := stack[len(stack)-1]
-
-				// Only consider this paragraph if it directly follows a heading and precedes a code block
 				if current.Description == "" && len(current.CodeBlocks) == 0 {
 					var description strings.Builder
-					ast.WalkFunc(node, func(node ast.Node, entering bool) ast.WalkStatus {
+					ast.WalkFunc(node, func(child ast.Node, entering bool) ast.WalkStatus {
 						if !entering {
 							return ast.GoToNext
 						}
 
-						switch v := node.(type) {
+						switch v := child.(type) {
 						case *ast.Text:
-							// Replace \n with space before appending
-							text := strings.ReplaceAll(string(v.Literal), "\n", " ")
-							description.WriteString(text)
+							description.WriteString(strings.ReplaceAll(string(v.Literal), "\n", " "))
 						case *ast.Hardbreak:
 							description.WriteString("\n")
 						}
@@ -153,33 +147,36 @@ func parseDoc(doc ast.Node) []cmdNode {
 					current.Description = description.String()
 				}
 			}
+
 		case *ast.CodeBlock:
 			if len(stack) > 0 {
 				current := stack[len(stack)-1]
-				// Check if the language is supported
 				if _, exists := languageConfigs[string(v.Info)]; exists {
 					current.CodeBlocks = append(current.CodeBlocks, *v)
 				}
 			}
+
 		case *ast.Table:
 			if len(stack) > 0 {
 				current := stack[len(stack)-1]
 				if current.Env == nil {
 					current.Env = make(map[string]string)
 				}
-
-				ast.WalkFunc(node, func(node ast.Node, entering bool) ast.WalkStatus {
+				ast.WalkFunc(v, func(child ast.Node, entering bool) ast.WalkStatus {
 					if !entering {
 						return ast.GoToNext
 					}
 
-					switch v := node.(type) {
-					case *ast.TableHeader:
-						return ast.SkipChildren
+					switch v := child.(type) {
 					case *ast.TableRow:
-						key := string(v.Children[0].GetChildren()[0].(*ast.Text).Literal)
-						val := string(v.Children[1].GetChildren()[0].(*ast.Text).Literal)
-						current.Env[key] = val
+						if len(v.Children) >= 2 {
+							keyNode, valNode := v.Children[0], v.Children[1]
+							if keyText, ok := keyNode.GetChildren()[0].(*ast.Text); ok {
+								if valText, ok := valNode.GetChildren()[0].(*ast.Text); ok {
+									current.Env[string(keyText.Literal)] = string(valText.Literal)
+								}
+							}
+						}
 					}
 
 					return ast.GoToNext
@@ -421,14 +418,14 @@ func main() {
 		var err error
 		inputFile, err = findDoc()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error finding document: %v\n", err)
+			fmt.Printf("Error finding document: %v\n", err)
 			return
 		}
 	}
 
 	content, err := os.ReadFile(inputFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
+		fmt.Printf("Error reading file: %v\n", err)
 		return
 	}
 
@@ -468,7 +465,7 @@ func main() {
 	}
 
 	if !findAndExecuteNestedCommand(cmdNodes, headingPath, subCmdArgs, 0) {
-		fmt.Fprintf(os.Stderr, "Command path '%s' not found\n", strings.Join(headingPath, " > "))
+		fmt.Printf("Command path '%s' not found\n", strings.Join(headingPath, " > "))
 		return
 	}
 }
