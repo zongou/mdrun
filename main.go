@@ -372,20 +372,23 @@ func showCommands(cmdNodes []cmdNode, verbose bool) {
 
 func showHelp() {
 	const indention = "    "
+	var sb strings.Builder
 
-	fmt.Fprintf(os.Stderr, "%s\n\n", "Run markdown codeblocks by its heading.")
-	fmt.Fprintf(os.Stderr, "%s\n", color.YellowString("USAGE:"))
-	fmt.Fprintf(os.Stderr, "%s%s [--file FILE] <heading...> [-- <args...>]\n", indention, programName)
-	fmt.Fprintln(os.Stderr)
+	sb.WriteString("Run markdown codeblocks by its heading.\n\n")
+	sb.WriteString(color.YellowString("USAGE:") + "\n")
+	sb.WriteString(fmt.Sprintf("%s%s [--file FILE] <heading...> [-- <args...>]\n", indention, programName))
+	sb.WriteString("\n")
 
-	fmt.Fprintf(os.Stderr, "%s\n", color.YellowString("FLAGS:"))
-	fmt.Fprintf(os.Stderr, "%s-h, --help        Show this help\n", indention)
-	fmt.Fprintf(os.Stderr, "%s-v, --verbose     Print more information\n", indention)
-	fmt.Fprintln(os.Stderr)
+	sb.WriteString(color.YellowString("FLAGS:") + "\n")
+	sb.WriteString(fmt.Sprintf("%s-h, --help        Show this help\n", indention))
+	sb.WriteString(fmt.Sprintf("%s-v, --verbose     Print more information\n", indention))
+	sb.WriteString("\n")
 
-	fmt.Fprintf(os.Stderr, "%s\n", color.YellowString("OPTIONS:"))
-	fmt.Fprintf(os.Stderr, "%s-f, --file        MarkDown file to use\n", indention)
-	fmt.Fprintln(os.Stderr)
+	sb.WriteString(color.YellowString("OPTIONS:") + "\n")
+	sb.WriteString(fmt.Sprintf("%s-f, --file        MarkDown file to use\n", indention))
+	sb.WriteString("\n")
+
+	fmt.Fprint(os.Stderr, sb.String())
 }
 
 func main() {
