@@ -49,7 +49,11 @@ type cmdNode struct {
 	Description string
 }
 
-// findDoc searches for a {programName}.md file, then .{programName}.md, then README.md in the current or parent directories.
+// errorMsg prints error messages to stderr with consistent formatting
+func errorMsg(format string, a ...interface{}) {
+	fmt.Fprintf(os.Stderr, programName+": "+format+"\n", a...)
+}
+
 func findDoc() (string, error) {
 	dir, err := os.Getwd()
 	if err != nil {
@@ -420,14 +424,14 @@ func main() {
 		var err error
 		inputFile, err = findDoc()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error finding document: %v\n", err)
+			errorMsg("finding document: %v", err)
 			return
 		}
 	}
 
 	content, err := os.ReadFile(inputFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
+		errorMsg("reading file: %v", err)
 		return
 	}
 
@@ -467,7 +471,7 @@ func main() {
 	}
 
 	if !findAndExecuteNestedCommand(cmdNodes, headingPath, subCmdArgs, 0) {
-		fmt.Fprintf(os.Stderr, "Command path '%s' not found\n", strings.Join(headingPath, " > "))
+		errorMsg("command path '%s' not found", strings.Join(headingPath, " > "))
 		return
 	}
 }
