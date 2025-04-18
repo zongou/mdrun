@@ -22,10 +22,12 @@ Prefixed env
 
 Custom env
 
-| key        | value  |
-| ---------- | ------ |
-| scope_root | foo    |
-| scope      | global |
+| key          | value |
+| ------------ | ----- |
+| HEADING_ROOT | root  |
+| HEADING      | root  |
+| CGO_ENABLED  | 0     |
+| PROGRAM      | cr    |
 
 The basic idea is make markdown work like makemenuconfig
 
@@ -58,8 +60,10 @@ go mod tidy
 Build this program
 
 ```sh
-ARCH=$(uname -m)
-zig cc --target=${ARCH}-linux-musl -o "crc" -static -s main.c
+# go build -ldflags="-w -s"
+zig cc --target=$(uname -m)-linux-musl -o "${PROGRAM}" -static -s -Os main.c
+file "${PROGRAM}"
+du -ahd0 "${PROGRAM}"
 ```
 
 ## Install
@@ -100,10 +104,9 @@ hyperfine "${MD_EXE} test env" "$@"
 
 Test this program
 
-| key        | value |
-| ---------- | ----- |
-| scope_test | bar   |
-| scope      | test  |
+| key     | value |
+| ------- | ----- |
+| HEADING | Test  |
 
 ```sh
 ${MD_EXE} test env
@@ -118,20 +121,16 @@ echo "cr file size: $(du -ahd0 ${MD_EXE} | ${MD_EXE} test awk)"
 
 Test scoped env
 
-| key       | value |
-| --------- | ----- |
-| scope_env | 123   |
-| scope     | env   |
+| key     | value |
+| ------- | ----- |
+| HEADING | env   |
 
 ```sh
-env|grep scope
 for env in \
     MD_EXE \
     MD_FILE \
-    scope_root \
-    scope_test \
-    scope_env \
-    scope; do
+    HEADING \
+    HEADING_ROOT; do
 
     eval echo "env ${env}=\${${env}}"
 done
@@ -141,12 +140,12 @@ done
 
 Test scoped env (heading +1)
 
-| key   | value |
-| ----- | ----- |
-| scope | sub   |
+| key     | value |
+| ------- | ----- |
+| HEADING | sub   |
 
 ```sh
-echo "sub scope=${scope}"
+echo "sub HEADING=${HEADING}"
 ```
 
 ### sh

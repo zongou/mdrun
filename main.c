@@ -1,13 +1,15 @@
+#include <ctype.h>
+#include <dirent.h>
+#include <getopt.h>
+#include <libgen.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
-#include <unistd.h>
-#include <dirent.h>
 #include <sys/stat.h>
-#include <libgen.h>
-#include <getopt.h>
-#include <limits.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 // Case insensitive string comparison
 int strcicmp(const char *a, const char *b) {
@@ -22,8 +24,8 @@ int strcicmp(const char *a, const char *b) {
 }
 
 // Find markdown file in current and parent directories
-char* find_markdown_file(const char *program_name) {
-    char current_dir[PATH_MAX];
+char *find_markdown_file(const char *program_name) {
+    char  current_dir[PATH_MAX];
     char *result = NULL;
 
     if (getcwd(current_dir, sizeof(current_dir)) == NULL) {
@@ -41,7 +43,7 @@ char* find_markdown_file(const char *program_name) {
 
     // Get program name without path and extension
     char *base_name = basename(base_prog);
-    char *dot = strrchr(base_name, '.');
+    char *dot       = strrchr(base_name, '.');
     if (dot) *dot = '\0';
 
     while (1) {
@@ -78,7 +80,7 @@ char* find_markdown_file(const char *program_name) {
         // Move to parent directory
         char *parent = dirname(working_dir);
         if (strcmp(parent, working_dir) == 0) {
-            break;  // Reached root directory
+            break; // Reached root directory
         }
         strncpy(working_dir, parent, PATH_MAX);
     }
@@ -91,35 +93,35 @@ cleanup:
 
 // Environment variable entry
 struct env_entry {
-    char *key;
-    char *value;
+    char             *key;
+    char             *value;
     struct env_entry *next;
 };
 
 // Code block entry
 struct code_block {
-    char *info;
-    char *content;
+    char              *info;
+    char              *content;
     struct code_block *next;
 };
 
 // Command node structure (similar to Go's cmdNode)
 struct cmd_node {
     // Heading info
-    int level;
+    int   level;
     char *heading_text;
-    
+
     // Code blocks
     struct code_block *code_blocks;
-    
+
     // Environment variables
     struct env_entry *env;
-    
+
     // Node relationships
     struct cmd_node *parent;
-    struct cmd_node *next;  // Next sibling
+    struct cmd_node *next; // Next sibling
     struct cmd_node *children;
-    
+
     // Description
     char *description;
 };
@@ -128,7 +130,7 @@ struct cmd_node {
 struct cmd_node *create_cmd_node(int level, const char *heading) {
     struct cmd_node *node = calloc(1, sizeof(struct cmd_node));
     if (!node) return NULL;
-    
+
     node->level = level;
     if (heading) {
         node->heading_text = strdup(heading);
@@ -139,15 +141,15 @@ struct cmd_node *create_cmd_node(int level, const char *heading) {
 // Add code block to a node
 void add_code_block(struct cmd_node *node, const char *info, const char *content) {
     if (!node || !content) return;
-    
+
     struct code_block *block = calloc(1, sizeof(struct code_block));
     if (!block) return;
-    
+
     if (info) block->info = strdup(info);
     if (content) {
         size_t len = strlen(content);
         // Remove trailing newline if present
-        while (len > 0 && content[len-1] == '\n') {
+        while (len > 0 && content[len - 1] == '\n') {
             len--;
         }
         block->content = malloc(len + 1);
@@ -156,25 +158,25 @@ void add_code_block(struct cmd_node *node, const char *info, const char *content
             block->content[len] = '\0';
         }
     }
-    
+
     // Add to front of list
-    block->next = node->code_blocks;
+    block->next       = node->code_blocks;
     node->code_blocks = block;
 }
 
 // Add environment variable to a node
 void add_env_var(struct cmd_node *node, const char *key, const char *value) {
     if (!node || !key || !value) return;
-    
+
     struct env_entry *entry = calloc(1, sizeof(struct env_entry));
     if (!entry) return;
-    
-    entry->key = strdup(key);
+
+    entry->key   = strdup(key);
     entry->value = strdup(value);
-    
+
     // Add to front of list
     entry->next = node->env;
-    node->env = entry;
+    node->env   = entry;
 }
 
 // Free a command node and all its resources
@@ -185,8 +187,8 @@ void free_cmd_node(struct cmd_node *node) {
     struct cmd_node *child = node->children;
     struct cmd_node *next_child;
     while (child) {
-        next_child = child->next;
-        child->next = NULL;  // Prevent circular references
+        next_child  = child->next;
+        child->next = NULL; // Prevent circular references
         free_cmd_node(child);
         child = next_child;
     }
@@ -219,10 +221,10 @@ void free_cmd_node(struct cmd_node *node) {
     // Free node's own resources
     if (node->heading_text) free(node->heading_text);
     if (node->description) free(node->description);
-    
+
     // Clear pointers before freeing
     node->parent = NULL;
-    node->next = NULL;
+    node->next   = NULL;
     free(node);
 }
 
@@ -230,7 +232,7 @@ void free_cmd_node(struct cmd_node *node) {
 char *safe_strdup(const char *str) {
     if (!str) return NULL;
     size_t len = strlen(str);
-    char *dup = malloc(len + 1);
+    char  *dup = malloc(len + 1);
     if (dup) {
         memcpy(dup, str, len);
         dup[len] = '\0';
@@ -245,7 +247,7 @@ int get_heading_level(const char *line) {
         level++;
         line++;
     }
-    
+
     // Must be followed by space and not exceed 6 levels
     return (level > 0 && level <= 6 && isspace(*line)) ? level : 0;
 }
@@ -254,13 +256,13 @@ int get_heading_level(const char *line) {
 int is_code_block_start(const char *line, char *info) {
     while (isspace(*line)) line++;
     if (strncmp(line, "```", 3) != 0) return 0;
-    
+
     // Extract language info if present
     line += 3;
-    char *end = strchr(line, '\n');
+    char *end = strchr(line, '\0');
     if (end) {
         size_t len = end - line;
-        while (len > 0 && isspace(line[len-1])) len--;
+        while (len > 0 && isspace(line[len - 1])) len--;
         if (len > 0 && info) {
             memcpy(info, line, len);
             info[len] = '\0';
@@ -272,64 +274,64 @@ int is_code_block_start(const char *line, char *info) {
 // Parse a table row into key-value pair
 void parse_table_row(struct cmd_node *node, const char *row) {
     if (!node || !row) return;
-    
+
     // Skip leading whitespace
     const char *ptr = row;
     while (*ptr && isspace(*ptr)) ptr++;
-    
+
     // Must start with pipe
     if (*ptr != '|') return;
     ptr++;
-    
+
     // Parse first column (key)
     while (*ptr && isspace(*ptr)) ptr++;
     const char *key_start = ptr;
-    
+
     // Find end of key (next pipe)
     while (*ptr && *ptr != '|') ptr++;
     if (!*ptr) return;
-    
+
     // Trim key
     const char *key_end = ptr - 1;
     while (key_end > key_start && isspace(*key_end)) key_end--;
     key_end++;
-    
+
     // Skip pipe and whitespace
     ptr++;
     while (*ptr && isspace(*ptr)) ptr++;
-    
+
     // Parse second column (value)
     const char *value_start = ptr;
-    
+
     // Find end of value (next pipe or end of string)
     while (*ptr && *ptr != '|') ptr++;
     const char *value_end = ptr - 1;
     while (value_end > value_start && isspace(*value_end)) value_end--;
     value_end++;
-    
+
     // Skip empty or separator rows
     if (key_end <= key_start || value_end <= value_start) return;
     if (strstr(key_start, "---") || strstr(value_start, "---")) return;
-    
+
     // Extract and clean key/value
-    size_t key_len = key_end - key_start;
+    size_t key_len   = key_end - key_start;
     size_t value_len = value_end - value_start;
-    
-    char *key = malloc(key_len + 1);
+
+    char *key   = malloc(key_len + 1);
     char *value = malloc(value_len + 1);
-    
+
     if (key && value) {
         memcpy(key, key_start, key_len);
         key[key_len] = '\0';
         memcpy(value, value_start, value_len);
         value[value_len] = '\0';
-        
+
         // Add to environment if not header row
         if (strcasecmp(key, "key") != 0 && strcasecmp(value, "value") != 0) {
             add_env_var(node, key, value);
         }
     }
-    
+
     free(key);
     free(value);
 }
@@ -342,19 +344,19 @@ struct cmd_node *parse_markdown_content(const char *content) {
     if (!root) return NULL;
 
     struct cmd_node *current = root;
-    char *buffer = strdup(content);
+    char            *buffer  = strdup(content);
     if (!buffer) {
         free_cmd_node(root);
         return NULL;
     }
 
-    char *line = strtok(buffer, "\n");
-    char *code_buffer = NULL;
-    size_t code_size = 0;
-    int in_code_block = 0;
-    char code_info[256] = {0};
-    int in_table = 0;
-    
+    char  *line           = strtok(buffer, "\n");
+    char  *code_buffer    = NULL;
+    size_t code_size      = 0;
+    int    in_code_block  = 0;
+    char   code_info[256] = {0};
+    int    in_table       = 0;
+
     while (line) {
         char *trimmed = line;
         while (isspace(*trimmed)) trimmed++;
@@ -364,25 +366,25 @@ struct cmd_node *parse_markdown_content(const char *content) {
                 // End of code block
                 if (code_buffer && current) {
                     // Remove trailing newline if present
-                    if (code_size > 0 && code_buffer[code_size-1] == '\n') {
+                    if (code_size > 0 && code_buffer[code_size - 1] == '\n') {
                         code_buffer[--code_size] = '\0';
                     }
                     add_code_block(current, code_info, code_buffer);
                 }
                 free(code_buffer);
-                code_buffer = NULL;
-                code_size = 0;
+                code_buffer   = NULL;
+                code_size     = 0;
                 in_code_block = 0;
             } else {
                 // Append to code buffer
-                size_t line_len = strlen(line);
-                char *new_buffer = realloc(code_buffer, code_size + line_len + 2);
+                size_t line_len   = strlen(line);
+                char  *new_buffer = realloc(code_buffer, code_size + line_len + 2);
                 if (new_buffer) {
                     code_buffer = new_buffer;
                     memcpy(code_buffer + code_size, line, line_len);
                     code_size += line_len;
                     code_buffer[code_size++] = '\n';
-                    code_buffer[code_size] = '\0';
+                    code_buffer[code_size]   = '\0';
                 }
             }
         } else {
@@ -391,7 +393,7 @@ struct cmd_node *parse_markdown_content(const char *content) {
                 // Handle heading
                 const char *heading_text = trimmed + level;
                 while (isspace(*heading_text)) heading_text++;
-                
+
                 struct cmd_node *heading = create_cmd_node(level, heading_text);
                 if (heading) {
                     // Find correct parent based on heading level
@@ -410,13 +412,13 @@ struct cmd_node *parse_markdown_content(const char *content) {
                         while (sibling->next) sibling = sibling->next;
                         sibling->next = heading;
                     }
-                    
+
                     current = heading;
                 }
             } else if (strncmp(trimmed, "```", 3) == 0) {
                 // Start of code block
                 in_code_block = 1;
-                code_info[0] = '\0';
+                code_info[0]  = '\0';
                 is_code_block_start(trimmed, code_info);
             } else if (*trimmed == '|') {
                 // Table row
@@ -433,7 +435,7 @@ struct cmd_node *parse_markdown_content(const char *content) {
                 current->description = strdup(trimmed);
             }
         }
-        
+
         line = strtok(NULL, "\n");
     }
 
@@ -490,27 +492,261 @@ void print_cmd_tree(struct cmd_node *node, int level) {
     }
 }
 
+// Language configuration structure
+struct language_config {
+    const char  *name;
+    const char **prefix_args;
+    size_t       prefix_args_count;
+};
+
+// Language configuration argument arrays
+static const char *awk_args[]        = {"$CODE"};
+static const char *sh_args[]         = {"-euc", "$CODE", "--"};
+static const char *zsh_args[]        = {"-euc", "$CODE", "--"};
+static const char *fish_args[]       = {"-euc", "$CODE", "--"};
+static const char *dash_args[]       = {"-euc", "$CODE", "--"};
+static const char *ksh_args[]        = {"-euc", "$CODE", "--"};
+static const char *ash_args[]        = {"-euc", "$CODE", "--"};
+static const char *node_args[]       = {"-e", "$CODE"};
+static const char *python_args[]     = {"-c", "$CODE"};
+static const char *ruby_args[]       = {"-e", "$CODE"};
+static const char *php_args[]        = {"-r", "$CODE"};
+static const char *cmd_args[]        = {"/c", "$CODE"};
+static const char *powershell_args[] = {"-c", "$CODE"};
+
+// Language configuration mappings
+static const struct language_config language_configs[] = {
+    {"awk", awk_args, 1},
+    {"sh", sh_args, 3},
+    {"bash", sh_args, 3},
+    {"zsh", zsh_args, 3},
+    {"fish", fish_args, 3},
+    {"dash", dash_args, 3},
+    {"ksh", ksh_args, 3},
+    {"ash", ash_args, 3},
+    {"shell", sh_args, 3},
+    {"js", node_args, 2},
+    {"javascript", node_args, 2},
+    {"py", python_args, 2},
+    {"python", python_args, 2},
+    {"rb", ruby_args, 2},
+    {"ruby", ruby_args, 2},
+    {"php", php_args, 2},
+    {"cmd", cmd_args, 2},
+    {"batch", cmd_args, 2},
+    {"powershell", powershell_args, 2}};
+
+// Execute code blocks for a given node
+int execute_code_blocks(struct cmd_node *node, char **args, int num_args) {
+    if (!node) return 0;
+
+    struct code_block *block = node->code_blocks;
+    while (block) {
+        if (block->info && block->content) {
+            const char                   *lang   = block->info;
+            const struct language_config *config = NULL;
+
+            fprintf(stderr, "Executing %s code block\n", lang);
+
+            // Find language configuration
+            for (size_t i = 0; i < sizeof(language_configs) / sizeof(language_configs[0]); i++) {
+                if (strcasecmp(language_configs[i].name, lang) == 0) {
+                    config = &language_configs[i];
+                    break;
+                }
+            }
+
+            if (config) {
+                // Fork and execute
+                pid_t pid = fork();
+                if (pid == -1) {
+                    perror("fork failed");
+                    return 0;
+                }
+
+                if (pid == 0) {
+                    // Child process
+                    // Calculate number of arguments needed
+                    int total_args = 1;                       // Command name
+                    total_args += config->prefix_args_count;  // Prefix arguments
+                    if (num_args > 0) total_args += num_args; // User arguments
+
+                    // Allocate argument array
+                    char **exec_args = calloc(total_args + 1, sizeof(char *));
+                    if (!exec_args) {
+                        _exit(1);
+                    }
+
+                    // Fill argument array
+                    int arg_idx          = 0;
+                    exec_args[arg_idx++] = (char *)lang; // Use language name as command
+
+                    // Add prefix arguments, replacing $CODE with actual content
+                    for (size_t i = 0; i < config->prefix_args_count; i++) {
+                        if (strcmp(config->prefix_args[i], "$CODE") == 0) {
+                            exec_args[arg_idx++] = block->content;
+                        } else {
+                            exec_args[arg_idx++] = (char *)config->prefix_args[i];
+                        }
+                    }
+
+                    // Add user arguments
+                    for (int i = 0; i < num_args; i++) {
+                        exec_args[arg_idx++] = args[i];
+                    }
+
+                    exec_args[arg_idx] = NULL;
+
+                    // Execute the command
+                    execvp(lang, exec_args);
+                    perror("execvp failed");
+                    free(exec_args);
+                    _exit(1);
+                } else {
+                    // Parent process
+                    int status;
+                    waitpid(pid, &status, 0);
+
+                    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+                        fprintf(stderr, "Command failed with status %d\n", WEXITSTATUS(status));
+                        return 0;
+                    }
+                }
+            } else {
+                fprintf(stderr, "Unsupported language: %s\n", lang);
+                return 0;
+            }
+        }
+        block = block->next;
+    }
+    return 1;
+}
+
+// Find and execute command under specified heading path
+int find_and_execute_command(struct cmd_node *root, char **heading_path, int num_headings, char **args, int num_args) {
+    if (!root || !heading_path || num_headings <= 0) return 0;
+
+    fprintf(stderr, "Looking for command path:");
+    for (int i = 0; i < num_headings; i++) {
+        fprintf(stderr, " %s", heading_path[i]);
+    }
+    fprintf(stderr, "\n");
+
+    struct cmd_node *current = root;
+    int              found;
+
+    // Search through all children recursively
+    for (int i = 0; i < num_headings; i++) {
+        found                  = 0;
+        struct cmd_node *child = current->children;
+
+        fprintf(stderr, "Looking under '%s' for heading '%s'\n",
+                current->heading_text ? current->heading_text : "(root)",
+                heading_path[i]);
+
+        // First search direct children
+        while (child) {
+            if (child->heading_text && strcicmp(child->heading_text, heading_path[i]) == 0) {
+                current = child;
+                found   = 1;
+                fprintf(stderr, "Found heading: %s\n", child->heading_text);
+                break;
+            }
+            child = child->next;
+        }
+
+        // If not found in direct children, search recursively through each child's children
+        if (!found) {
+            child = current->children;
+            while (child && !found) {
+                // Recursively search this child's subtree
+                struct cmd_node *stack[100]; // Max depth of 100 should be enough
+                int              stack_size = 0;
+                stack[stack_size++]         = child;
+
+                while (stack_size > 0 && !found) {
+                    struct cmd_node *node = stack[--stack_size];
+
+                    if (node->heading_text && strcicmp(node->heading_text, heading_path[i]) == 0) {
+                        current = node;
+                        found   = 1;
+                        fprintf(stderr, "Found heading: %s (nested)\n", node->heading_text);
+                        break;
+                    }
+
+                    // Add children to stack
+                    struct cmd_node *sub = node->children;
+                    while (sub && stack_size < 100) {
+                        stack[stack_size++] = sub;
+                        sub                 = sub->next;
+                    }
+                }
+
+                if (!found) {
+                    child = child->next;
+                }
+            }
+        }
+
+        if (!found) {
+            fprintf(stderr, "Heading not found: %s\n", heading_path[i]);
+            return 0;
+        }
+    }
+
+    // Set up environment variables from parents
+    fprintf(stderr, "Setting up environment variables\n");
+    struct cmd_node *env_node = current;
+    while (env_node) {
+        struct env_entry *env = env_node->env;
+        while (env) {
+            fprintf(stderr, "Setting %s=%s\n", env->key, env->value);
+            setenv(env->key, env->value, 1);
+            env = env->next;
+        }
+        env_node = env_node->parent;
+    }
+
+    // Execute code blocks under the found heading
+    return execute_code_blocks(current, args, num_args);
+}
+
 int main(int argc, char *argv[]) {
-    char *markdown_file = NULL;
-    char *found_file = NULL;
-    char *buffer = NULL;
-    FILE *file = NULL;
-    struct cmd_node *root = NULL;
-    int result = 1;
+    int index = 0;
+    while (index < argc) {
+        if (strcmp(argv[index++], "--") == 0) {
+            break;
+        }
+    }
+
+    char            *markdown_file = NULL;
+    char            *found_file    = NULL;
+    char            *buffer        = NULL;
+    FILE            *file          = NULL;
+    struct cmd_node *root          = NULL;
+    int              result        = 1;
 
     struct option long_options[] = {
         {"file", required_argument, NULL, 'f'},
-        {NULL, 0, NULL, 0}
-    };
+        {"help", no_argument, NULL, 'h'},
+        {NULL, 0, NULL, 0}};
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "f:", long_options, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, "f:h", long_options, NULL)) != -1) {
         switch (opt) {
+            case 0:
+                printf("option %s", long_options[optind - 1].name);
+                break;
             case 'f':
                 markdown_file = optarg;
                 break;
+            case 'h':
+                fprintf(stderr, "Usage: %s [--file <markdown_file>] <heading...> [-- <args...>]\n", argv[0]);
+                return 0;
+            case '?':
+                break;
             default:
-                fprintf(stderr, "Usage: %s [--file <markdown_file>]\n", argv[0]);
+                fprintf(stderr, "Usage: %s [--file <markdown_file>] <heading...> [-- <args...>]\n", argv[0]);
                 return 1;
         }
     }
@@ -524,6 +760,8 @@ int main(int argc, char *argv[]) {
         }
         markdown_file = found_file;
     }
+
+    fprintf(stderr, "Using markdown file: %s\n", markdown_file);
 
     // Read the markdown file
     file = fopen(markdown_file, "r");
@@ -544,37 +782,38 @@ int main(int argc, char *argv[]) {
         goto cleanup;
     }
 
-    size_t read_size = fread(buffer, 1, size, file);
+    size_t read_size  = fread(buffer, 1, size, file);
     buffer[read_size] = '\0';
     fclose(file);
-    file = NULL;  // Mark as closed
+    file = NULL;
+
+    // Set environment variables
+    setenv("MD_EXE", argv[0], 1);
+    setenv("MD_FILE", markdown_file, 1);
 
     // Parse markdown content
     root = parse_markdown_content(buffer);
-    if (root) {
-        printf("Markdown Document Structure:\n\n");
+    if (!root) {
+        fprintf(stderr, "Failed to parse markdown content\n");
+        goto cleanup;
+    }
+
+    if (optind < argc) {
+        char **heading_path = argv + optind;
+        int    num_headings = index - optind;
+        char **cmd_args     = argv + index;
+        int    num_args     = argc - index;
+
+        result = find_and_execute_command(root, heading_path, num_headings, cmd_args, num_args) ? 0 : 1;
+    } else {
         print_cmd_tree(root, 0);
-        result = 0;  // Success
     }
 
 cleanup:
-    // Free resources in reverse order of allocation
-    if (root) {
-        free_cmd_node(root);
-        root = NULL;
-    }
-    if (buffer) {
-        free(buffer);
-        buffer = NULL;
-    }
-    if (file) {
-        fclose(file);
-        file = NULL;
-    }
-    if (found_file) {
-        free(found_file);
-        found_file = NULL;
-    }
+    if (root) free_cmd_node(root);
+    if (buffer) free(buffer);
+    if (file) fclose(file);
+    if (found_file) free(found_file);
 
     return result;
 }
