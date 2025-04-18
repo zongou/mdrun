@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <cmark-gfm.h>
 #include <ctype.h>
 #include <unistd.h>
 #include <dirent.h>
@@ -233,82 +232,41 @@ char *safe_strdup(const char *str) {
     size_t len = strlen(str);
     char *dup = malloc(len + 1);
     if (dup) {
-        memcpy(dup, str, len);  // Fixed: was using len as source instead of str
+        memcpy(dup, str, len);
         dup[len] = '\0';
     }
     return dup;
 }
 
-// Get text content from a node
-char *get_node_text(cmark_node *node) {
-    if (!node) return NULL;
-    
-    cmark_node *child = cmark_node_first_child(node);
-    if (!child) {
-        // Direct text content
-        const char *literal = cmark_node_get_literal(node);
-        return literal ? safe_strdup(literal) : NULL;
+// Check if a line starts with a heading marker
+int get_heading_level(const char *line) {
+    int level = 0;
+    while (*line == '#') {
+        level++;
+        line++;
     }
     
-    // Concatenate all child text nodes
-    size_t total_len = 0;
-    cmark_node *iter = child;
-    while (iter) {
-        if (cmark_node_get_type(iter) == CMARK_NODE_TEXT) {
-            const char *text = cmark_node_get_literal(iter);
-            if (text) total_len += strlen(text);
-        }
-        total_len++; // For newline between nodes
-        iter = cmark_node_next(iter);
-    }
-    
-    if (total_len == 0) return NULL;
-    
-    char *result = malloc(total_len + 1);
-    if (!result) return NULL;
-    
-    char *ptr = result;
-    iter = child;
-    while (iter) {
-        if (cmark_node_get_type(iter) == CMARK_NODE_TEXT) {
-            const char *text = cmark_node_get_literal(iter);
-            if (text) {
-                size_t len = strlen(text);
-                memcpy(ptr, text, len);
-                ptr += len;
-            }
-        }
-        if (cmark_node_next(iter)) {
-            *ptr++ = '\n';
-        }
-        iter = cmark_node_next(iter);
-    }
-    *ptr = '\0';
-    
-    return result;
+    // Must be followed by space and not exceed 6 levels
+    return (level > 0 && level <= 6 && isspace(*line)) ? level : 0;
 }
 
-// Get clean text from node, removing markdown formatting
-char *get_clean_text(cmark_node *node) {
-    if (!node) return NULL;
+// Check if a line starts a code block
+int is_code_block_start(const char *line, char *info) {
+    while (isspace(*line)) line++;
+    if (strncmp(line, "```", 3) != 0) return 0;
     
-    char *text = get_node_text(node);
-    if (!text) return NULL;
-    
-    // Remove markdown formatting
-    char *clean = text;
-    char *write = text;
-    
-    while (*clean) {
-        if (*clean == '`' || *clean == '*' || *clean == '_') {
-            clean++;
-            continue;
+    // Extract language info if present
+    line += 3;
+    char *end = strchr(line, '\n');
+    if (end) {
+        size_t len = end - line;
+        while (len > 0 && isspace(line[len-1])) len--;
+        if (len > 0 && info) {
+            memcpy(info, line, len);
+            info[len] = '\0';
         }
-        *write++ = *clean++;
     }
-    *write = '\0';
-    
-    return text;
+    return 1;
 }
 
 // Parse a table row into key-value pair
@@ -376,92 +334,66 @@ void parse_table_row(struct cmd_node *node, const char *row) {
     free(value);
 }
 
-// Check if a line is a markdown table separator
-int is_table_separator(const char *line) {
-    // Skip leading whitespace and pipe
-    while (*line && (isspace(*line) || *line == '|')) line++;
-    
-    // Must contain at least one dash
-    if (!*line || *line != '-') return 0;
-    
-    // Rest of the line should only contain dashes, spaces, colons or pipes
-    while (*line) {
-        if (!isspace(*line) && *line != '-' && *line != '|' && *line != ':') {
-            return 0;
-        }
-        line++;
-    }
-    
-    return 1;
-}
-
-// Process markdown table content
-void process_table_content(struct cmd_node *node, const char *content) {
-    if (!node || !content) return;
-    
-    // Make working copy of content
-    char *table = strdup(content);
-    if (!table) return;
-    
-    // Parse line by line
-    char *saveptr = NULL;
-    char *line = strtok_r(table, "\n", &saveptr);
-    int row = 0;
-    int is_table = 0;
-    
-    while (line) {
-        // Skip empty lines
-        char *trimmed = line;
-        while (*trimmed && isspace(*trimmed)) trimmed++;
-        
-        if (*trimmed) {
-            if (row == 0) {
-                // First row must start with pipe
-                if (*trimmed == '|') is_table = 1;
-            } else if (row == 1) {
-                // Second row must be separator
-                is_table = is_table && is_table_separator(trimmed);
-            } else if (is_table) {
-                // Process data rows
-                parse_table_row(node, trimmed);
-            }
-            row++;
-        }
-        
-        line = strtok_r(NULL, "\n", &saveptr);
-    }
-    
-    free(table);
-}
-
-struct cmd_node *parse_markdown(cmark_node *doc) {
-    if (!doc) return NULL;
+// Parse markdown content into command nodes
+struct cmd_node *parse_markdown_content(const char *content) {
+    if (!content) return NULL;
 
     struct cmd_node *root = create_cmd_node(0, NULL);
     if (!root) return NULL;
 
     struct cmd_node *current = root;
-    cmark_iter *iter = cmark_iter_new(doc);
-    if (!iter) {
+    char *buffer = strdup(content);
+    if (!buffer) {
         free_cmd_node(root);
         return NULL;
     }
 
-    cmark_event_type ev_type;
-    while ((ev_type = cmark_iter_next(iter)) != CMARK_EVENT_DONE) {
-        cmark_node *node = cmark_iter_get_node(iter);
-        if (!node) continue;
+    char *line = strtok(buffer, "\n");
+    char *code_buffer = NULL;
+    size_t code_size = 0;
+    int in_code_block = 0;
+    char code_info[256] = {0};
+    int in_table = 0;
+    
+    while (line) {
+        char *trimmed = line;
+        while (isspace(*trimmed)) trimmed++;
 
-        if (ev_type == CMARK_EVENT_ENTER) {
-            switch (cmark_node_get_type(node)) {
-                case CMARK_NODE_HEADING: {
-                    int level = cmark_node_get_heading_level(node);
-                    char *text = get_clean_text(node);
-                    struct cmd_node *heading = create_cmd_node(level, text);
-                    free(text);
-                    
-                    if (!heading) continue;
-
+        if (in_code_block) {
+            if (strncmp(trimmed, "```", 3) == 0) {
+                // End of code block
+                if (code_buffer && current) {
+                    // Remove trailing newline if present
+                    if (code_size > 0 && code_buffer[code_size-1] == '\n') {
+                        code_buffer[--code_size] = '\0';
+                    }
+                    add_code_block(current, code_info, code_buffer);
+                }
+                free(code_buffer);
+                code_buffer = NULL;
+                code_size = 0;
+                in_code_block = 0;
+            } else {
+                // Append to code buffer
+                size_t line_len = strlen(line);
+                char *new_buffer = realloc(code_buffer, code_size + line_len + 2);
+                if (new_buffer) {
+                    code_buffer = new_buffer;
+                    memcpy(code_buffer + code_size, line, line_len);
+                    code_size += line_len;
+                    code_buffer[code_size++] = '\n';
+                    code_buffer[code_size] = '\0';
+                }
+            }
+        } else {
+            int level = get_heading_level(trimmed);
+            if (level > 0) {
+                // Handle heading
+                const char *heading_text = trimmed + level;
+                while (isspace(*heading_text)) heading_text++;
+                
+                struct cmd_node *heading = create_cmd_node(level, heading_text);
+                if (heading) {
                     // Find correct parent based on heading level
                     struct cmd_node *parent = current;
                     while (parent && parent != root && parent->level >= level) {
@@ -480,57 +412,37 @@ struct cmd_node *parse_markdown(cmark_node *doc) {
                     }
                     
                     current = heading;
-                    break;
                 }
-
-                case CMARK_NODE_CODE_BLOCK: {
-                    if (current) {
-                        const char *info = cmark_node_get_fence_info(node);
-                        const char *content = cmark_node_get_literal(node);
-                        if (content) {
-                            // Remove trailing newline
-                            char *trimmed_content = safe_strdup(content);
-                            if (trimmed_content) {
-                                size_t len = strlen(trimmed_content);
-                                while (len > 0 && trimmed_content[len-1] == '\n') {
-                                    trimmed_content[--len] = '\0';
-                                }
-                                add_code_block(current, info, trimmed_content);
-                                free(trimmed_content);
-                            }
-                        }
-                    }
-                    break;
+            } else if (strncmp(trimmed, "```", 3) == 0) {
+                // Start of code block
+                in_code_block = 1;
+                code_info[0] = '\0';
+                is_code_block_start(trimmed, code_info);
+            } else if (*trimmed == '|') {
+                // Table row
+                if (!in_table) {
+                    in_table = 1;
+                } else if (!strstr(trimmed, "---")) {
+                    parse_table_row(current, trimmed);
                 }
-
-                case CMARK_NODE_PARAGRAPH: {
-                    if (current) {
-                        char *text = get_node_text(node);
-                        if (text) {
-                            if (strchr(text, '|')) {
-                                // Possible table
-                                process_table_content(current, text);
-                                free(text);
-                            } else if (!current->description) {
-                                current->description = get_clean_text(node);
-                                free(text);
-                            } else {
-                                free(text);
-                            }
-                        }
-                    }
-                    break;
-                }
-                
-                default:
-                // Handle unexpected node types
-                // fprintf(stderr, "Unhandled node type: %d\n", cmark_node_get_type(node));
-                break;
+            } else if (*trimmed == '\0') {
+                // Empty line ends table
+                in_table = 0;
+            } else if (!in_table && current && !current->description) {
+                // Regular text becomes description
+                current->description = strdup(trimmed);
             }
         }
+        
+        line = strtok(NULL, "\n");
     }
 
-    cmark_iter_free(iter);
+    // Clean up
+    if (code_buffer) {
+        free(code_buffer);
+    }
+    free(buffer);
+
     return root;
 }
 
@@ -583,8 +495,6 @@ int main(int argc, char *argv[]) {
     char *found_file = NULL;
     char *buffer = NULL;
     FILE *file = NULL;
-    cmark_parser *parser = NULL;
-    cmark_node *doc = NULL;
     struct cmd_node *root = NULL;
     int result = 1;
 
@@ -639,26 +549,8 @@ int main(int argc, char *argv[]) {
     fclose(file);
     file = NULL;  // Mark as closed
 
-    // Parse markdown with GFM options
-    unsigned int options = CMARK_OPT_DEFAULT | 
-                         CMARK_OPT_TABLE_PREFER_STYLE_ATTRIBUTES |
-                         CMARK_OPT_UNSAFE;
-    
-    parser = cmark_parser_new(options);
-    if (!parser) {
-        fprintf(stderr, "Failed to create parser\n");
-        goto cleanup;
-    }
-
-    cmark_parser_feed(parser, buffer, strlen(buffer));
-    doc = cmark_parser_finish(parser);
-    if (!doc) {
-        fprintf(stderr, "Failed to parse document\n");
-        goto cleanup;
-    }
-
-    // Parse into command nodes
-    root = parse_markdown(doc);
+    // Parse markdown content
+    root = parse_markdown_content(buffer);
     if (root) {
         printf("Markdown Document Structure:\n\n");
         print_cmd_tree(root, 0);
@@ -670,14 +562,6 @@ cleanup:
     if (root) {
         free_cmd_node(root);
         root = NULL;
-    }
-    if (doc) {
-        cmark_node_free(doc);
-        doc = NULL;
-    }
-    if (parser) {
-        cmark_parser_free(parser);
-        parser = NULL;
     }
     if (buffer) {
         free(buffer);
