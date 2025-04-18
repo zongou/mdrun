@@ -58,7 +58,8 @@ go mod tidy
 Build this program
 
 ```sh
-go build -ldflags="-w -s"
+ARCH=$(uname -m)
+zig cc --target=${ARCH}-linux-musl -o "crc" -static -s main.c
 ```
 
 ## Install
@@ -66,7 +67,6 @@ go build -ldflags="-w -s"
 Install this program
 
 ```sh
-go run . build
 PROG=$(basename "${MD_EXE}")
 if command -v sudo >/dev/null; then
     sudo install "${PROG}" "/usr/local/bin/${PROG}"
@@ -93,7 +93,6 @@ fi
 Benchmark this program
 
 ```sh
-go run . build
 hyperfine "${MD_EXE} test env" "$@"
 ```
 
@@ -107,7 +106,6 @@ Test this program
 | scope      | test  |
 
 ```sh
-go run . build
 ${MD_EXE} test env
 ${MD_EXE} test env sub
 ${MD_EXE} test args
