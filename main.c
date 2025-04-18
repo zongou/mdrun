@@ -257,7 +257,7 @@ int is_code_block_start(const char *line, char *info) {
     
     // Extract language info if present
     line += 3;
-    char *end = strchr(line, '\n');
+    char *end = strchr(line, '\0');
     if (end) {
         size_t len = end - line;
         while (len > 0 && isspace(line[len-1])) len--;
