@@ -58,7 +58,8 @@ go mod tidy
 Build this program
 
 ```sh
-go build -ldflags="-w -s"
+ARCH=$(uname -m)
+zig cc --target=${ARCH}-linux-musl -o "crc" -static -s main.c
 ```
 
 ## Install
