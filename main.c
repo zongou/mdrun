@@ -695,15 +695,24 @@ int find_and_execute_command(struct cmd_node *root, char **heading_path, int num
 
     // Set up environment variables from parents
     fprintf(stderr, "Setting up environment variables\n");
+    
+    // First collect all nodes from root to target in a stack
+    struct cmd_node *stack[100]; // Assuming max depth of 100
+    int stack_size = 0;
     struct cmd_node *env_node = current;
     while (env_node) {
-        struct env_entry *env = env_node->env;
+        stack[stack_size++] = env_node;
+        env_node = env_node->parent;
+    }
+
+    // Now set environment variables from root to leaf (reverse order of stack)
+    for (int i = stack_size - 1; i >= 0; i--) {
+        struct env_entry *env = stack[i]->env;
         while (env) {
             fprintf(stderr, "Setting %s=%s\n", env->key, env->value);
             setenv(env->key, env->value, 1);
             env = env->next;
         }
-        env_node = env_node->parent;
     }
 
     // Execute code blocks under the found heading
@@ -742,8 +751,6 @@ int main(int argc, char *argv[]) {
             case 'h':
                 fprintf(stderr, "Usage: %s [--file <markdown_file>] <heading...> [-- <args...>]\n", argv[0]);
                 return 0;
-            case '?':
-                break;
             default:
                 fprintf(stderr, "Usage: %s [--file <markdown_file>] <heading...> [-- <args...>]\n", argv[0]);
                 return 1;
