@@ -748,19 +748,19 @@ int find_and_execute_command(struct cmd_node *root, char **heading_path, int num
 }
 
 int main(int argc, char *argv[]) {
-    int index = 0;
-    while (index < argc) {
-        if (strcmp(argv[index++], "--") == 0) {
-            break;
-        }
-    }
-
     char            *markdown_file = NULL;
     char            *found_file    = NULL;
     char            *buffer        = NULL;
     FILE            *file          = NULL;
     struct cmd_node *root          = NULL;
     int              result        = 1;
+
+    int index = 0;
+    while (index < argc) {
+        if (strcmp(argv[index++], "--") == 0) {
+            break;
+        }
+    }
 
     struct option long_options[] = {
         {"file", required_argument, NULL, 'f'},
