@@ -159,9 +159,16 @@ void add_code_block(struct cmd_node *node, const char *info, const char *content
         }
     }
 
-    // Add to front of list
-    block->next       = node->code_blocks;
-    node->code_blocks = block;
+    // Add to end of list to preserve order
+    if (!node->code_blocks) {
+        node->code_blocks = block;
+    } else {
+        struct code_block *last = node->code_blocks;
+        while (last->next) {
+            last = last->next;
+        }
+        last->next = block;
+    }
 }
 
 // Add environment variable to a node
