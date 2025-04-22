@@ -1,3 +1,4 @@
+#include "tree.h"
 #include <ctype.h>
 #include <dirent.h>
 #include <getopt.h>
@@ -747,6 +748,27 @@ int find_and_execute_command(struct cmd_node *root, char **heading_path, int num
     return execute_code_blocks(current, args, num_args);
 }
 
+
+// Convert cmd_node to Tree structure
+Tree *convert_to_tree(struct cmd_node *node) {
+    if (!node) return NULL;
+
+    // Create tree node with heading text or "(root)" if none
+    Tree *tree = new_tree(node->heading_text ? node->heading_text : "(root)");
+
+    // Convert and add child nodes
+    struct cmd_node *child = node->children;
+    while (child) {
+        Tree *child_tree = convert_to_tree(child);
+        if (child_tree) {
+            add_subtree(tree, child_tree);
+        }
+        child = child->next;
+    }
+
+    return tree;
+}
+
 int main(int argc, char *argv[]) {
     char            *markdown_file = NULL;
     char            *found_file    = NULL;
@@ -850,8 +872,23 @@ int main(int argc, char *argv[]) {
 
         result = find_and_execute_command(root, heading_path, num_headings, cmd_args, num_args) ? 0 : 1;
     } else {
-        verbosePrintf("No command specified, printing tree\n");
-        print_cmd_node(root, 0);
+        verbosePrintf("No command specified, printing trees\n");
+        // Print each level 1 heading as a separate tree
+        struct cmd_node *child = root->children;
+        while (child) {
+            if (child->level == 1) { // Only process level 1 headings
+                Tree *tree = convert_to_tree(child);
+                if (tree) {
+                    char *tree_str = print_tree(tree);
+                    if (tree_str) {
+                        printf("%s\n", tree_str); // Add newline between trees
+                        free(tree_str);
+                    }
+                    free_tree(tree);
+                }
+            }
+            child = child->next;
+        }
     }
 
 cleanup:
