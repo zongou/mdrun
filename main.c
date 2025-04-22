@@ -11,6 +11,80 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+// Language configuration structure
+struct language_config {
+    const char  *name;
+    const char **prefix_args;
+    size_t       prefix_args_count;
+};
+
+// Language configuration argument arrays
+static const char *sh_args[]         = {"$NAME", "-euc", "$CODE", "--"};
+static const char *awk_args[]        = {"awk", "$CODE"};
+static const char *node_args[]       = {"node", "-e", "$CODE"};
+static const char *python_args[]     = {"python", "-c", "$CODE"};
+static const char *ruby_args[]       = {"ruby", "-e", "$CODE"};
+static const char *php_args[]        = {"php", "-r", "$CODE"};
+static const char *cmd_args[]        = {"cmd.exe", "/c", "$CODE"};
+static const char *powershell_args[] = {"powershell.exe", "-c", "$CODE"};
+
+// Language configuration mappings
+static const struct language_config language_configs[] = {
+    {"sh", sh_args, 4},
+    {"bash", sh_args, 4},
+    {"zsh", sh_args, 4},
+    {"fish", sh_args, 4},
+    {"dash", sh_args, 4},
+    {"ksh", sh_args, 4},
+    {"ash", sh_args, 4},
+    {"shell", sh_args, 4},
+    {"awk", awk_args, 2},
+    {"js", node_args, 3},
+    {"javascript", node_args, 3},
+    {"py", python_args, 3},
+    {"python", python_args, 3},
+    {"rb", ruby_args, 3},
+    {"ruby", ruby_args, 3},
+    {"php", php_args, 3},
+    {"cmd", cmd_args, 3},
+    {"batch", cmd_args, 3},
+    {"powershell", powershell_args, 3}};
+
+// Environment variable entry
+struct env_entry {
+    char             *key;
+    char             *value;
+    struct env_entry *next;
+};
+
+// Code block entry
+struct code_block {
+    char              *info;
+    char              *content;
+    struct code_block *next;
+};
+
+// Command node structure (similar to Go's cmdNode)
+struct cmd_node {
+    // Heading info
+    int   level;
+    char *heading_text;
+
+    // Code blocks
+    struct code_block *code_blocks;
+
+    // Environment variables
+    struct env_entry *env;
+
+    // Node relationships
+    struct cmd_node *parent;
+    struct cmd_node *next; // Next sibling
+    struct cmd_node *children;
+
+    // Description
+    char *description;
+};
+
 // Case insensitive string comparison
 int strcicmp(const char *a, const char *b) {
     while (*a && *b) {
@@ -90,41 +164,6 @@ cleanup:
     free(base_prog);
     return result;
 }
-
-// Environment variable entry
-struct env_entry {
-    char             *key;
-    char             *value;
-    struct env_entry *next;
-};
-
-// Code block entry
-struct code_block {
-    char              *info;
-    char              *content;
-    struct code_block *next;
-};
-
-// Command node structure (similar to Go's cmdNode)
-struct cmd_node {
-    // Heading info
-    int   level;
-    char *heading_text;
-
-    // Code blocks
-    struct code_block *code_blocks;
-
-    // Environment variables
-    struct env_entry *env;
-
-    // Node relationships
-    struct cmd_node *parent;
-    struct cmd_node *next; // Next sibling
-    struct cmd_node *children;
-
-    // Description
-    char *description;
-};
 
 // Create a new command node
 struct cmd_node *create_cmd_node(int level, const char *heading) {
@@ -499,45 +538,6 @@ void print_cmd_tree(struct cmd_node *node, int level) {
     }
 }
 
-// Language configuration structure
-struct language_config {
-    const char  *name;
-    const char **prefix_args;
-    size_t       prefix_args_count;
-};
-
-// Language configuration argument arrays
-static const char *awk_args[]        = {"awk", "$CODE"};
-static const char *sh_args[]         = {"$NAME", "-euc", "$CODE", "--"};
-static const char *node_args[]       = {"node", "-e", "$CODE"};
-static const char *python_args[]     = {"python", "-c", "$CODE"};
-static const char *ruby_args[]       = {"ruby", "-e", "$CODE"};
-static const char *php_args[]        = {"php", "-r", "$CODE"};
-static const char *cmd_args[]        = {"cmd.exe", "/c", "$CODE"};
-static const char *powershell_args[] = {"powershell.exe", "-c", "$CODE"};
-
-// Language configuration mappings
-static const struct language_config language_configs[] = {
-    {"awk", awk_args, 2},
-    {"sh", sh_args, 4},
-    {"bash", sh_args, 4},
-    {"zsh", sh_args, 4},
-    {"fish", sh_args, 4},
-    {"dash", sh_args, 4},
-    {"ksh", sh_args, 4},
-    {"ash", sh_args, 4},
-    {"shell", sh_args, 4},
-    {"js", node_args, 3},
-    {"javascript", node_args, 3},
-    {"py", python_args, 3},
-    {"python", python_args, 3},
-    {"rb", ruby_args, 3},
-    {"ruby", ruby_args, 3},
-    {"php", php_args, 3},
-    {"cmd", cmd_args, 3},
-    {"batch", cmd_args, 3},
-    {"powershell", powershell_args, 3}};
-
 // Execute code blocks for a given node
 int execute_code_blocks(struct cmd_node *node, char **args, int num_args) {
     if (!node) return 0;
@@ -695,14 +695,14 @@ int find_and_execute_command(struct cmd_node *root, char **heading_path, int num
 
     // Set up environment variables from parents
     fprintf(stderr, "Setting up environment variables\n");
-    
+
     // First collect all nodes from root to target in a stack
     struct cmd_node *stack[100]; // Assuming max depth of 100
-    int stack_size = 0;
-    struct cmd_node *env_node = current;
+    int              stack_size = 0;
+    struct cmd_node *env_node   = current;
     while (env_node) {
         stack[stack_size++] = env_node;
-        env_node = env_node->parent;
+        env_node            = env_node->parent;
     }
 
     // Now set environment variables from root to leaf (reverse order of stack)
