@@ -521,7 +521,7 @@ struct cmd_node *parse_markdown_content(const char *content) {
 }
 
 // Print environment variables in A=B format
-void print_cmd_tree(struct cmd_node *node, int level) {
+void print_cmd_node(struct cmd_node *node, int level) {
     if (!node) return;
 
     // Print indentation
@@ -557,7 +557,7 @@ void print_cmd_tree(struct cmd_node *node, int level) {
     // Print children
     struct cmd_node *child = node->children;
     while (child) {
-        print_cmd_tree(child, level + 1);
+        print_cmd_node(child, level + 1);
         child = child->next;
     }
 }
@@ -866,7 +866,7 @@ int main(int argc, char *argv[]) {
         if (verbose) {
             fprintf(stderr, "No command specified, printing tree\n");
         }
-        print_cmd_tree(root, 0);
+        print_cmd_node(root, 0);
     }
 
 cleanup:
