@@ -3,6 +3,7 @@
 #include <getopt.h>
 #include <libgen.h>
 #include <limits.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +11,19 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+// Global verbose flag
+static int g_verbose = 0;
+
+// Verbose message function
+void verbosePrintf(const char *format, ...) {
+    if (!g_verbose) return;
+
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+}
 
 // Language configuration structure
 struct language_config {
@@ -180,6 +194,18 @@ struct cmd_node *create_cmd_node(int level, const char *heading) {
 // Add code block to a node
 void add_code_block(struct cmd_node *node, const char *info, const char *content) {
     if (!node || !content) return;
+
+    // Skip if language is not supported
+    if (info) {
+        int supported = 0;
+        for (size_t i = 0; i < sizeof(language_configs) / sizeof(language_configs[0]); i++) {
+            if (strcasecmp(language_configs[i].name, info) == 0) {
+                supported = 1;
+                break;
+            }
+        }
+        if (!supported) return; // Skip unsupported language
+    }
 
     struct code_block *block = calloc(1, sizeof(struct code_block));
     if (!block) return;
@@ -504,8 +530,6 @@ void print_cmd_tree(struct cmd_node *node, int level) {
     // Print node info
     if (node->heading_text) {
         printf("Heading(%d): %s\n", node->level, node->heading_text);
-    } else {
-        printf("(root)\n");
     }
 
     // Print description if exists
@@ -539,16 +563,22 @@ void print_cmd_tree(struct cmd_node *node, int level) {
 }
 
 // Execute code blocks for a given node
-int execute_code_blocks(struct cmd_node *node, char **args, int num_args) {
+int execute_code_blocks(struct cmd_node *node, char **args, int num_args, int verbose) {
     if (!node) return 0;
 
+    g_verbose                = verbose; // Set global verbose flag
     struct code_block *block = node->code_blocks;
+
     while (block) {
         if (block->info && block->content) {
             const char                   *lang   = block->info;
             const struct language_config *config = NULL;
 
-            fprintf(stderr, "Executing %s code block\n", lang);
+            if (verbose) {
+                verbosePrintf("Executing %s code block:\n%s\n", lang, block->content);
+            } else {
+                verbosePrintf("Executing %s code block\n", lang);
+            }
 
             // Find language configuration
             for (size_t i = 0; i < sizeof(language_configs) / sizeof(language_configs[0]); i++) {
@@ -559,6 +589,8 @@ int execute_code_blocks(struct cmd_node *node, char **args, int num_args) {
             }
 
             if (config) {
+                verbosePrintf("Using language config: %s\n", config->name);
+
                 // Fork and execute
                 pid_t pid = fork();
                 if (pid == -1) {
@@ -609,6 +641,8 @@ int execute_code_blocks(struct cmd_node *node, char **args, int num_args) {
                     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
                         fprintf(stderr, "Command failed with status %d\n", WEXITSTATUS(status));
                         return 0;
+                    } else if (verbose) {
+                        verbosePrintf("Command completed successfully\n");
                     }
                 }
             } else {
@@ -622,14 +656,16 @@ int execute_code_blocks(struct cmd_node *node, char **args, int num_args) {
 }
 
 // Find and execute command under specified heading path
-int find_and_execute_command(struct cmd_node *root, char **heading_path, int num_headings, char **args, int num_args) {
+int find_and_execute_command(struct cmd_node *root, char **heading_path, int num_headings, char **args, int num_args, int verbose) {
     if (!root || !heading_path || num_headings <= 0) return 0;
 
-    fprintf(stderr, "Looking for command path:");
+    g_verbose = verbose; // Set global verbose flag
+
+    verbosePrintf("Looking for command path:");
     for (int i = 0; i < num_headings; i++) {
-        fprintf(stderr, " %s", heading_path[i]);
+        verbosePrintf(" %s", heading_path[i]);
     }
-    fprintf(stderr, "\n");
+    verbosePrintf("\n");
 
     struct cmd_node *current = root;
     int              found;
@@ -639,16 +675,16 @@ int find_and_execute_command(struct cmd_node *root, char **heading_path, int num
         found                  = 0;
         struct cmd_node *child = current->children;
 
-        fprintf(stderr, "Looking under '%s' for heading '%s'\n",
-                current->heading_text ? current->heading_text : "(root)",
-                heading_path[i]);
+        verbosePrintf("Looking under '%s' for heading '%s'\n",
+                      current->heading_text ? current->heading_text : "(root)",
+                      heading_path[i]);
 
         // First search direct children
         while (child) {
             if (child->heading_text && strcicmp(child->heading_text, heading_path[i]) == 0) {
                 current = child;
                 found   = 1;
-                fprintf(stderr, "Found heading: %s\n", child->heading_text);
+                verbosePrintf("Found heading: %s\n", child->heading_text);
                 break;
             }
             child = child->next;
@@ -669,7 +705,7 @@ int find_and_execute_command(struct cmd_node *root, char **heading_path, int num
                     if (node->heading_text && strcicmp(node->heading_text, heading_path[i]) == 0) {
                         current = node;
                         found   = 1;
-                        fprintf(stderr, "Found heading: %s (nested)\n", node->heading_text);
+                        verbosePrintf("Found heading: %s (nested)\n", node->heading_text);
                         break;
                     }
 
@@ -693,8 +729,7 @@ int find_and_execute_command(struct cmd_node *root, char **heading_path, int num
         }
     }
 
-    // Set up environment variables from parents
-    fprintf(stderr, "Setting up environment variables\n");
+    verbosePrintf("Setting up environment variables\n");
 
     // First collect all nodes from root to target in a stack
     struct cmd_node *stack[100]; // Assuming max depth of 100
@@ -709,14 +744,14 @@ int find_and_execute_command(struct cmd_node *root, char **heading_path, int num
     for (int i = stack_size - 1; i >= 0; i--) {
         struct env_entry *env = stack[i]->env;
         while (env) {
-            fprintf(stderr, "Setting %s=%s\n", env->key, env->value);
+            verbosePrintf("Setting %s=%s\n", env->key, env->value);
             setenv(env->key, env->value, 1);
             env = env->next;
         }
     }
 
     // Execute code blocks under the found heading
-    return execute_code_blocks(current, args, num_args);
+    return execute_code_blocks(current, args, num_args, verbose);
 }
 
 int main(int argc, char *argv[]) {
@@ -733,14 +768,16 @@ int main(int argc, char *argv[]) {
     FILE            *file          = NULL;
     struct cmd_node *root          = NULL;
     int              result        = 1;
+    int              verbose       = 0;
 
     struct option long_options[] = {
         {"file", required_argument, NULL, 'f'},
         {"help", no_argument, NULL, 'h'},
+        {"verbose", no_argument, NULL, 'v'},
         {NULL, 0, NULL, 0}};
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "f:h", long_options, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, "f:hv", long_options, NULL)) != -1) {
         switch (opt) {
             case 0:
                 printf("option %s", long_options[optind - 1].name);
@@ -749,10 +786,17 @@ int main(int argc, char *argv[]) {
                 markdown_file = optarg;
                 break;
             case 'h':
-                fprintf(stderr, "Usage: %s [--file <markdown_file>] <heading...> [-- <args...>]\n", argv[0]);
+                fprintf(stderr, "Usage: %s [--file <markdown_file>] [--verbose] <heading...> [-- <args...>]\n", argv[0]);
+                fprintf(stderr, "Options:\n");
+                fprintf(stderr, "  -f, --file     Specify markdown file to use\n");
+                fprintf(stderr, "  -v, --verbose  Enable verbose output\n");
+                fprintf(stderr, "  -h, --help     Show this help message\n");
                 return 0;
+            case 'v':
+                verbose = 1;
+                break;
             default:
-                fprintf(stderr, "Usage: %s [--file <markdown_file>] <heading...> [-- <args...>]\n", argv[0]);
+                fprintf(stderr, "Usage: %s [--file <markdown_file>] [--verbose] <heading...> [-- <args...>]\n", argv[0]);
                 return 1;
         }
     }
@@ -767,7 +811,9 @@ int main(int argc, char *argv[]) {
         markdown_file = found_file;
     }
 
-    fprintf(stderr, "Using markdown file: %s\n", markdown_file);
+    if (verbose) {
+        fprintf(stderr, "Using markdown file: %s\n", markdown_file);
+    }
 
     // Read the markdown file
     file = fopen(markdown_file, "r");
@@ -810,8 +856,16 @@ int main(int argc, char *argv[]) {
         char **cmd_args     = argv + index;
         int    num_args     = argc - index;
 
-        result = find_and_execute_command(root, heading_path, num_headings, cmd_args, num_args) ? 0 : 1;
+        if (verbose) {
+            fprintf(stderr, "Executing command with %d heading(s) and %d argument(s)\n",
+                    num_headings, num_args);
+        }
+
+        result = find_and_execute_command(root, heading_path, num_headings, cmd_args, num_args, verbose) ? 0 : 1;
     } else {
+        if (verbose) {
+            fprintf(stderr, "No command specified, printing tree\n");
+        }
         print_cmd_tree(root, 0);
     }
 

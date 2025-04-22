@@ -20,6 +20,7 @@ var programName string = path.Base(os.Args[0])
 // Define standard argument arrays
 var (
 	shellArgs      = []string{"$NAME", "-euc", "$CODE", "--"}
+	awkArgs        = []string{"awk", "$CODE"}
 	nodeArgs       = []string{"node", "-e", "$CODE"}
 	pythonArgs     = []string{"python", "-c", "$CODE"}
 	rubyArgs       = []string{"ruby", "-e", "$CODE"}
@@ -30,7 +31,6 @@ var (
 
 // Create a map for language configurations
 var languageConfigs = map[string]languageConfig{
-	"awk":        {"awk", shellArgs},
 	"sh":         {"sh", shellArgs},
 	"bash":       {"bash", shellArgs},
 	"zsh":        {"zsh", shellArgs},
@@ -39,6 +39,7 @@ var languageConfigs = map[string]languageConfig{
 	"ksh":        {"ksh", shellArgs},
 	"ash":        {"ash", shellArgs},
 	"shell":      {"sh", shellArgs},
+	"awk":        {"awk", awkArgs},
 	"js":         {"node", nodeArgs},
 	"javascript": {"node", nodeArgs},
 	"py":         {"python", pythonArgs},
