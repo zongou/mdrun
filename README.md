@@ -27,7 +27,6 @@ Custom env
 | HEADING_ROOT | root  |
 | HEADING      | root  |
 | CGO_ENABLED  | 0     |
-| PROGRAM      | cr    |
 
 The basic idea is make markdown work like makemenuconfig
 
@@ -61,9 +60,11 @@ Build this program
 
 ```sh
 # go build -ldflags="-w -s"
-zig cc --target=$(uname -m)-linux-musl -o "${PROGRAM}" -static -s -Os main.c
-file "${PROGRAM}"
-du -ahd0 "${PROGRAM}"
+OUTPUT=cr
+TARGET="$(uname -m)-linux-musl"
+zig cc --target="${TARGET}" -o "${OUTPUT}" -static -s -Os main.c tree.c
+file "${OUTPUT}"
+du -ahd0 "${OUTPUT}"
 ```
 
 ## Install
