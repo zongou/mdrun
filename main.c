@@ -13,11 +13,11 @@
 #include <unistd.h>
 
 // Global verbose flag
-static int g_verbose = 0;
+static int VERBOSE_PRINT = 0;
 
 // Verbose message function
 void verbosePrintf(const char *format, ...) {
-    if (!g_verbose) return;
+    if (!VERBOSE_PRINT) return;
 
     va_list args;
     va_start(args, format);
@@ -563,10 +563,9 @@ void print_cmd_node(struct cmd_node *node, int level) {
 }
 
 // Execute code blocks for a given node
-int execute_code_blocks(struct cmd_node *node, char **args, int num_args, int verbose) {
+int execute_code_blocks(struct cmd_node *node, char **args, int num_args) {
     if (!node) return 0;
 
-    g_verbose                = verbose; // Set global verbose flag
     struct code_block *block = node->code_blocks;
 
     while (block) {
@@ -574,11 +573,7 @@ int execute_code_blocks(struct cmd_node *node, char **args, int num_args, int ve
             const char                   *lang   = block->info;
             const struct language_config *config = NULL;
 
-            if (verbose) {
-                verbosePrintf("Executing %s code block:\n%s\n", lang, block->content);
-            } else {
-                verbosePrintf("Executing %s code block\n", lang);
-            }
+            verbosePrintf("Executing %s code block:\n%s\n", lang, block->content);
 
             // Find language configuration
             for (size_t i = 0; i < sizeof(language_configs) / sizeof(language_configs[0]); i++) {
@@ -641,7 +636,7 @@ int execute_code_blocks(struct cmd_node *node, char **args, int num_args, int ve
                     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
                         fprintf(stderr, "Command failed with status %d\n", WEXITSTATUS(status));
                         return 0;
-                    } else if (verbose) {
+                    } else {
                         verbosePrintf("Command completed successfully\n");
                     }
                 }
@@ -656,10 +651,8 @@ int execute_code_blocks(struct cmd_node *node, char **args, int num_args, int ve
 }
 
 // Find and execute command under specified heading path
-int find_and_execute_command(struct cmd_node *root, char **heading_path, int num_headings, char **args, int num_args, int verbose) {
+int find_and_execute_command(struct cmd_node *root, char **heading_path, int num_headings, char **args, int num_args) {
     if (!root || !heading_path || num_headings <= 0) return 0;
-
-    g_verbose = verbose; // Set global verbose flag
 
     verbosePrintf("Looking for command path:");
     for (int i = 0; i < num_headings; i++) {
@@ -751,7 +744,7 @@ int find_and_execute_command(struct cmd_node *root, char **heading_path, int num
     }
 
     // Execute code blocks under the found heading
-    return execute_code_blocks(current, args, num_args, verbose);
+    return execute_code_blocks(current, args, num_args);
 }
 
 int main(int argc, char *argv[]) {
@@ -768,7 +761,6 @@ int main(int argc, char *argv[]) {
     FILE            *file          = NULL;
     struct cmd_node *root          = NULL;
     int              result        = 1;
-    int              verbose       = 0;
 
     struct option long_options[] = {
         {"file", required_argument, NULL, 'f'},
@@ -793,7 +785,7 @@ int main(int argc, char *argv[]) {
                 fprintf(stderr, "  -h, --help     Show this help message\n");
                 return 0;
             case 'v':
-                verbose = 1;
+                VERBOSE_PRINT = 1;
                 break;
             default:
                 fprintf(stderr, "Usage: %s [--file <markdown_file>] [--verbose] <heading...> [-- <args...>]\n", argv[0]);
@@ -811,9 +803,7 @@ int main(int argc, char *argv[]) {
         markdown_file = found_file;
     }
 
-    if (verbose) {
-        fprintf(stderr, "Using markdown file: %s\n", markdown_file);
-    }
+    verbosePrintf("Using markdown file: %s\n", markdown_file);
 
     // Read the markdown file
     file = fopen(markdown_file, "r");
@@ -856,16 +846,11 @@ int main(int argc, char *argv[]) {
         char **cmd_args     = argv + index;
         int    num_args     = argc - index;
 
-        if (verbose) {
-            fprintf(stderr, "Executing command with %d heading(s) and %d argument(s)\n",
-                    num_headings, num_args);
-        }
+        verbosePrintf("Executing command with %d heading(s) and %d argument(s)\n", num_headings, num_args);
 
-        result = find_and_execute_command(root, heading_path, num_headings, cmd_args, num_args, verbose) ? 0 : 1;
+        result = find_and_execute_command(root, heading_path, num_headings, cmd_args, num_args) ? 0 : 1;
     } else {
-        if (verbose) {
-            fprintf(stderr, "No command specified, printing tree\n");
-        }
+        verbosePrintf("No command specified, printing tree\n");
         print_cmd_node(root, 0);
     }
 
