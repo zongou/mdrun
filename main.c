@@ -507,41 +507,42 @@ struct language_config {
 };
 
 // Language configuration argument arrays
-static const char *awk_args[]        = {"$CODE"};
-static const char *sh_args[]         = {"-euc", "$CODE", "--"};
-static const char *zsh_args[]        = {"-euc", "$CODE", "--"};
-static const char *fish_args[]       = {"-euc", "$CODE", "--"};
-static const char *dash_args[]       = {"-euc", "$CODE", "--"};
-static const char *ksh_args[]        = {"-euc", "$CODE", "--"};
-static const char *ash_args[]        = {"-euc", "$CODE", "--"};
-static const char *node_args[]       = {"-e", "$CODE"};
-static const char *python_args[]     = {"-c", "$CODE"};
-static const char *ruby_args[]       = {"-e", "$CODE"};
-static const char *php_args[]        = {"-r", "$CODE"};
-static const char *cmd_args[]        = {"/c", "$CODE"};
-static const char *powershell_args[] = {"-c", "$CODE"};
+static const char *awk_args[] = {"awk", "$CODE"};
+static const char *sh_args[] = {"sh", "-euc", "$CODE", "--"};
+static const char *zsh_args[] = {"zsh", "-euc", "$CODE", "--"};
+static const char *fish_args[] = {"fish", "-euc", "$CODE", "--"};
+static const char *dash_args[] = {"dash", "-euc", "$CODE", "--"};
+static const char *ksh_args[] = {"ksh", "-euc", "$CODE", "--"};
+static const char *ash_args[] = {"ash", "-euc", "$CODE", "--"};
+static const char *node_args[] = {"node", "-e", "$CODE"};
+static const char *python_args[] = {"python", "-c", "$CODE"};
+static const char *ruby_args[] = {"ruby", "-e", "$CODE"};
+static const char *php_args[] = {"php", "-r", "$CODE"};
+static const char *cmd_args[] = {"cmd.exe", "/c", "$CODE"};
+static const char *powershell_args[] = {"powershell.exe", "-c", "$CODE"};
 
 // Language configuration mappings
 static const struct language_config language_configs[] = {
-    {"awk", awk_args, 1},
-    {"sh", sh_args, 3},
-    {"bash", sh_args, 3},
-    {"zsh", zsh_args, 3},
-    {"fish", fish_args, 3},
-    {"dash", dash_args, 3},
-    {"ksh", ksh_args, 3},
-    {"ash", ash_args, 3},
-    {"shell", sh_args, 3},
-    {"js", node_args, 2},
-    {"javascript", node_args, 2},
-    {"py", python_args, 2},
-    {"python", python_args, 2},
-    {"rb", ruby_args, 2},
-    {"ruby", ruby_args, 2},
-    {"php", php_args, 2},
-    {"cmd", cmd_args, 2},
-    {"batch", cmd_args, 2},
-    {"powershell", powershell_args, 2}};
+    {"awk", awk_args, 2},
+    {"sh", sh_args, 4},
+    {"bash", sh_args, 4},
+    {"zsh", zsh_args, 4},
+    {"fish", fish_args, 4},
+    {"dash", dash_args, 4},
+    {"ksh", ksh_args, 4},
+    {"ash", ash_args, 4},
+    {"shell", sh_args, 4},
+    {"js", node_args, 3},
+    {"javascript", node_args, 3},
+    {"py", python_args, 3},
+    {"python", python_args, 3},
+    {"rb", ruby_args, 3},
+    {"ruby", ruby_args, 3},
+    {"php", php_args, 3},
+    {"cmd", cmd_args, 3},
+    {"batch", cmd_args, 3},
+    {"powershell", powershell_args, 3}
+};
 
 // Execute code blocks for a given node
 int execute_code_blocks(struct cmd_node *node, char **args, int num_args) {
@@ -574,9 +575,8 @@ int execute_code_blocks(struct cmd_node *node, char **args, int num_args) {
                 if (pid == 0) {
                     // Child process
                     // Calculate number of arguments needed
-                    int total_args = 1;                       // Command name
-                    total_args += config->prefix_args_count;  // Prefix arguments
-                    if (num_args > 0) total_args += num_args; // User arguments
+                    int total_args = config->prefix_args_count; // Prefix arguments
+                    if (num_args > 0) total_args += num_args;  // User arguments
 
                     // Allocate argument array
                     char **exec_args = calloc(total_args + 1, sizeof(char *));
@@ -584,11 +584,8 @@ int execute_code_blocks(struct cmd_node *node, char **args, int num_args) {
                         _exit(1);
                     }
 
-                    // Fill argument array
-                    int arg_idx          = 0;
-                    exec_args[arg_idx++] = (char *)lang; // Use language name as command
-
-                    // Add prefix arguments, replacing $CODE with actual content
+                    // Fill argument array with prefix args first
+                    int arg_idx = 0;
                     for (size_t i = 0; i < config->prefix_args_count; i++) {
                         if (strcmp(config->prefix_args[i], "$CODE") == 0) {
                             exec_args[arg_idx++] = block->content;
@@ -604,8 +601,8 @@ int execute_code_blocks(struct cmd_node *node, char **args, int num_args) {
 
                     exec_args[arg_idx] = NULL;
 
-                    // Execute the command
-                    execvp(lang, exec_args);
+                    // Execute the command using first prefix arg as command
+                    execvp(config->prefix_args[0], exec_args);
                     perror("execvp failed");
                     free(exec_args);
                     _exit(1);
