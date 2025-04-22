@@ -17,27 +17,38 @@ import (
 
 var programName string = path.Base(os.Args[0])
 
+// Define standard argument arrays
+var (
+	shellArgs      = []string{"$NAME", "-euc", "$CODE", "--"}
+	nodeArgs       = []string{"node", "-e", "$CODE"}
+	pythonArgs     = []string{"python", "-c", "$CODE"}
+	rubyArgs       = []string{"ruby", "-e", "$CODE"}
+	phpArgs        = []string{"php", "-r", "$CODE"}
+	cmdArgs        = []string{"cmd.exe", "/c", "$CODE"}
+	powershellArgs = []string{"powershell.exe", "-c", "$CODE"}
+)
+
 // Create a map for language configurations
 var languageConfigs = map[string]languageConfig{
-	"awk":        {"awk", []string{"$CODE"}},
-	"sh":         {"sh", []string{"-euc", "$CODE", "--"}},
-	"bash":       {"bash", []string{"-euc", "$CODE", "--"}},
-	"zsh":        {"zsh", []string{"-euc", "$CODE", "--"}},
-	"fish":       {"fish", []string{"-euc", "$CODE", "--"}},
-	"dash":       {"dash", []string{"-euc", "$CODE", "--"}},
-	"ksh":        {"ksh", []string{"-euc", "$CODE", "--"}},
-	"ash":        {"ash", []string{"-euc", "$CODE", "--"}},
-	"shell":      {"sh", []string{"-euc", "$CODE", "--"}},
-	"js":         {"node", []string{"-e", "$CODE"}},
-	"javascript": {"node", []string{"-e", "$CODE"}},
-	"py":         {"python", []string{"-c", "$CODE"}},
-	"python":     {"python", []string{"-c", "$CODE"}},
-	"rb":         {"ruby", []string{"-e", "$CODE"}},
-	"ruby":       {"ruby", []string{"-e", "$CODE"}},
-	"php":        {"php", []string{"-r", "$CODE"}},
-	"cmd":        {"cmd.exe", []string{"/c", "$CODE"}},
-	"batch":      {"cmd.exe", []string{"/c", "$CODE"}},
-	"powershell": {"powershell.exe", []string{"-c", "$CODE"}},
+	"awk":        {"awk", shellArgs},
+	"sh":         {"sh", shellArgs},
+	"bash":       {"bash", shellArgs},
+	"zsh":        {"zsh", shellArgs},
+	"fish":       {"fish", shellArgs},
+	"dash":       {"dash", shellArgs},
+	"ksh":        {"ksh", shellArgs},
+	"ash":        {"ash", shellArgs},
+	"shell":      {"sh", shellArgs},
+	"js":         {"node", nodeArgs},
+	"javascript": {"node", nodeArgs},
+	"py":         {"python", pythonArgs},
+	"python":     {"python", pythonArgs},
+	"rb":         {"ruby", rubyArgs},
+	"ruby":       {"ruby", rubyArgs},
+	"php":        {"php", phpArgs},
+	"cmd":        {"cmd.exe", cmdArgs},
+	"batch":      {"cmd.exe", cmdArgs},
+	"powershell": {"powershell.exe", powershellArgs},
 }
 
 type cmdNode struct {
@@ -210,13 +221,19 @@ func execCmdNode(cmdNode cmdNode, args []string) error {
 			return fmt.Errorf("unsupported code block type: %s", info)
 		}
 
-		// Replace $CODE placeholder with the actual code block
+		// Replace $CODE and $NAME placeholders with actual values
 		prefixArgs := make([]string, len(config.prefixArgs))
 		for i, arg := range config.prefixArgs {
-			prefixArgs[i] = strings.Replace(arg, "$CODE", string(codeBlock.Literal), 1)
+			if arg == "$CODE" {
+				prefixArgs[i] = string(codeBlock.Literal)
+			} else if arg == "$NAME" {
+				prefixArgs[i] = config.cmdName
+			} else {
+				prefixArgs[i] = arg
+			}
 		}
 
-		cmdArgs := append(prefixArgs, args...)
+		cmdArgs := append(prefixArgs[1:], args...)
 
 		// Merge environment variables ensuring current node's variables take precedence
 		envMap := make(map[string]string)
@@ -238,14 +255,14 @@ func execCmdNode(cmdNode cmdNode, args []string) error {
 		}
 		cmdEnv = append(os.Environ(), cmdEnv...)
 
-		// Execute the command
-		cmd := exec.Command(config.cmdName, cmdArgs...)
+		// Execute the command using first prefix arg as the command
+		cmd := exec.Command(prefixArgs[0], cmdArgs...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.Stdin = os.Stdin
 		cmd.Env = cmdEnv
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("error executing command %s with args %v: %w", config.cmdName, cmdArgs, err)
+			return fmt.Errorf("error executing command %s with args %v: %w", prefixArgs[0], cmdArgs, err)
 		}
 	}
 
