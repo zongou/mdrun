@@ -62,7 +62,7 @@ Build this program
 # go build -ldflags="-w -s"
 OUTPUT=cr
 TARGET="$(uname -m)-linux-musl"
-zig cc --target="${TARGET}" -o "${OUTPUT}" -static -s -Os main.c tree.c
+zig cc --target="${TARGET}" -o "${OUTPUT}" -static -s -Os main.c cmd_node.c lang_config.c markdown.c tree.c
 file "${OUTPUT}"
 du -ahd0 "${OUTPUT}"
 ```
