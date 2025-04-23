@@ -753,6 +753,26 @@ int find_and_execute_command(struct cmd_node *root, char **heading_path, int num
 Tree *convert_to_tree(struct cmd_node *node) {
     if (!node) return NULL;
 
+    // Skip nodes without code blocks unless it's a root node (level 1)
+    if (node->level > 1 && !node->code_blocks) {
+        // Still process children even if we skip this node
+        Tree            *result = NULL;
+        struct cmd_node *child  = node->children;
+        while (child) {
+            Tree *child_tree = convert_to_tree(child);
+            if (child_tree) {
+                if (!result) {
+                    result = child_tree;
+                } else {
+                    // If we already have a result tree, add this as a sibling
+                    add_subtree(result, child_tree);
+                }
+            }
+            child = child->next;
+        }
+        return result;
+    }
+
     // Create tree node with heading text or "(root)" if none
     Tree *tree = new_tree(node->heading_text ? node->heading_text : "(root)");
 
