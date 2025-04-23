@@ -409,6 +409,15 @@ void parse_table_row(struct cmd_node *node, const char *row) {
     free(value);
 }
 
+static int should_append_description(const char *trimmed) {
+    // Only return 0 if line starts with markers that would end description text
+    if (strncmp(trimmed, "```", 3) == 0) return 0;  // Code block start
+    if (*trimmed == '|') return 0;                   // Table row
+    if (*trimmed == '#') return 0;                   // New heading
+    if (strncmp(trimmed, "---", 3) == 0) return 0;  // Horizontal rule
+    return 1;  // All other text, including empty lines, can be part of description
+}
+
 // Parse markdown content into command nodes
 struct cmd_node *parse_markdown_content(const char *content) {
     if (!content) return NULL;
@@ -429,6 +438,8 @@ struct cmd_node *parse_markdown_content(const char *content) {
     int    in_code_block  = 0;
     char   code_info[256] = {0};
     int    in_table       = 0;
+
+    static int parse_mode = 0;  // 0 = normal, 1 = in description, 2 = in code block, 3 = in table
 
     while (line) {
         char *trimmed = line;
@@ -487,25 +498,52 @@ struct cmd_node *parse_markdown_content(const char *content) {
                     }
 
                     current = heading;
+                    parse_mode = 1;  // Start collecting description
                 }
             } else if (strncmp(trimmed, "```", 3) == 0) {
                 // Start of code block
                 in_code_block = 1;
                 code_info[0]  = '\0';
                 is_code_block_start(trimmed, code_info);
+                parse_mode = 2;  // Switch to code block mode
             } else if (*trimmed == '|') {
                 // Table row
                 if (!in_table) {
                     in_table = 1;
-                } else if (!strstr(trimmed, "---")) {
+                    parse_mode = 3;  // Switch to table mode
+                }
+                if (in_table && !strstr(trimmed, "---")) {
                     parse_table_row(current, trimmed);
                 }
             } else if (*trimmed == '\0') {
-                // Empty line ends table
-                in_table = 0;
-            } else if (!in_table && current && !current->description) {
-                // Regular text becomes description
-                current->description = strdup(trimmed);
+                // Empty line handling varies by mode
+                if (parse_mode == 1 && current->description) {
+                    // In description mode, add space if we already have description text
+                    size_t curr_len = strlen(current->description);
+                    char *new_desc = realloc(current->description, curr_len + 2);
+                    if (new_desc) {
+                        current->description = new_desc;
+                        strcat(current->description, " ");
+                    }
+                }
+            } else {
+                // Regular text line
+                if (parse_mode == 1 && current && should_append_description(trimmed)) {
+                    // Add or append to description
+                    if (!current->description) {
+                        current->description = strdup(trimmed);
+                    } else {
+                        // Append this line to existing description with a space
+                        size_t curr_len = strlen(current->description);
+                        size_t new_len = strlen(trimmed);
+                        char *new_desc = realloc(current->description, curr_len + new_len + 2);
+                        if (new_desc) {
+                            current->description = new_desc;
+                            current->description[curr_len] = ' ';
+                            strcpy(current->description + curr_len + 1, trimmed);
+                        }
+                    }
+                }
             }
         }
 
@@ -531,12 +569,12 @@ void print_ast(struct cmd_node *node, int level) {
     // Print node info
     if (node->heading_text) {
         printf("Heading(%d): %s\n", node->level, node->heading_text);
-    }
-
-    // Print description if exists
-    if (node->description) {
-        for (int i = 0; i < level + 1; i++) printf("  ");
-        printf("Description: %s\n", node->description);
+        
+        // Print description if exists, indented one more level
+        if (node->description) {
+            for (int i = 0; i < level + 1; i++) printf("  ");
+            printf("Description: %s\n", node->description);
+        }
     }
 
     // Print environment variables in A=B format
