@@ -522,7 +522,7 @@ struct cmd_node *parse_markdown_content(const char *content) {
 }
 
 // Print environment variables in A=B format
-void print_cmd_node(struct cmd_node *node, int level) {
+void print_ast(struct cmd_node *node, int level) {
     if (!node) return;
 
     // Print indentation
@@ -558,7 +558,7 @@ void print_cmd_node(struct cmd_node *node, int level) {
     // Print children
     struct cmd_node *child = node->children;
     while (child) {
-        print_cmd_node(child, level + 1);
+        print_ast(child, level + 1);
         child = child->next;
     }
 }
@@ -796,6 +796,7 @@ int main(int argc, char *argv[]) {
     FILE            *file          = NULL;
     struct cmd_node *root          = NULL;
     int              result        = 1;
+    int              ptr_print_ast = 0;
 
     int index = 0;
     while (index < argc) {
@@ -808,6 +809,7 @@ int main(int argc, char *argv[]) {
         {"file", required_argument, NULL, 'f'},
         {"help", no_argument, NULL, 'h'},
         {"verbose", no_argument, NULL, 'v'},
+        {"ast", no_argument, &ptr_print_ast, 1},
         {NULL, 0, NULL, 0}};
 
     int opt;
@@ -882,6 +884,11 @@ int main(int argc, char *argv[]) {
         goto cleanup;
     }
 
+    if (ptr_print_ast) {
+        print_ast(root, 0);
+        return 0;
+    }
+
     if (optind < argc) {
         char **heading_path = argv + optind;
         int    num_headings = index - optind;
@@ -909,6 +916,8 @@ int main(int argc, char *argv[]) {
             }
             child = child->next;
         }
+
+        result = 0;
     }
 
 cleanup:
